@@ -38,7 +38,7 @@ static int dataBufferIndex = 0;
 void setup(){
 
   Serial.begin(115200);
-  Serial.println(F("TriStar Observatory : Dome Master Controller"));
+  Serial.println(F("TriStar Observatory : Dome Primary Controller"));
 
   // Setup and configure rf radio
 

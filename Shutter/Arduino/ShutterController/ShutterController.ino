@@ -19,10 +19,6 @@
 // Hardware configuration: nRF24L01 radio on SPI bus plus pins 7 & 8 
 RF24 radio(7,8);
 
-// Status bytes
-byte binStatus=0;
-byte tempStatus=0;
-byte errorStatus=0;
 
 // Pololu SMC config
 const int rxPin = 3;          // pin 3 connects to SMC TX
@@ -104,32 +100,34 @@ int getSMCVariable(unsigned char variableID)
 // handle commands received from RF24
 bool doCommand(byte command)
 {
-  if (char(command)=='o')
+  if (char(command)=='o')                 //TODO: Change these to byte values, save time.
   {
-    statusPayload[0] = 4;
-    setMotorSpeed(800);
+    //setMotorSpeed(800);
     Serial.println(F("Shutter Opening"));
   }
 
   if (char(command)=='c')
   {
-    statusPayload[0] = 8;
-    setMotorSpeed(-800);
+    //setMotorSpeed(-800);
     Serial.println(F("Shutter Closing"));
   }
 
   if (char(command)=='x')
   {
-    statusPayload[0] = 32;
-    setMotorSpeed(0);
+    //setMotorSpeed(0);
     Serial.println(F("Shutter Halted"));
   }
   return true;
 }
+
+void getStatus()
+{
+  
+}
 void setup(){
 
   Serial.begin(115200);
-  Serial.println(F("TriStar Observatory : Shutter Slave Controller"));
+  Serial.println(F("TriStar Observatory : Shutter Secondary Controller"));
   smcSerial.begin(19200);
 
   // Reset SMC when Arduino starts up
