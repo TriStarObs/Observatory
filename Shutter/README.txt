@@ -1,4 +1,4 @@
-Code for control of the shutter
+Code for control of the shutter.
 
 This is the secondary (Shutter) of a primary-secondary relationship between the dome 
 (rotating the dome itself, serving status info to ASCOM, and
