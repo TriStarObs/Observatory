@@ -104,17 +104,29 @@ int getSMCVariable(unsigned char variableID)
   return readSMCByte() + 256 * readSMCByte();
 }
 
-// Stuff the first statusPayload byte, which is binary status 
-// indicators according to the following table
-//
-//  1   Shutter is Open
-//  2   Shutter is Closed
-//  4   Shutter is Opening
-//  8   Shutter is Closing
-//  16  Shutter Error
-//  32  Shutter is stopped (Neither open nor closed)
-//  64  Reserved
-//  128 Reserved
+// Stuff the statusPayload bytes
+/**********************************************************************
+  0 : Binary status indicators according to the following table
+    0   Shutter is Open
+    1   Shutter is Closed
+    2   Shutter is Opening
+    3   Shutter is Closing
+    4   Shutter Error (Any error.  Details in next byte)
+    5   Shutter is stopped (Neither open nor closed)
+    6   Reserved
+    7   Reserved
+  1 : Error byte.  Pulled from SMC Error Status, with some bits dropped
+    0   Safe Start Violation
+    1   Serial Error (Requires Exit from Safe Start AND valid speed command)
+    2   Limit switch active, and attempt has been made to move into it
+    3   Low VIN (VIN value in next byte)
+    4   High VIN (VIN value in next byte)
+    5   Over Temperature  (TODO Set threshold in GUI)
+    6   Motor Driver Error
+    7   ERR Line High (With no other error)
+  2 : Controller temperature
+
+**********************************************************************/
 
 void stuffStatus()
 {
@@ -123,12 +135,28 @@ void stuffStatus()
   int motorSpeed = getSMCVariable(SPEED);
   int errorStatus = getSMCVariable(ERROR_STATUS);
 
-  bitWrite(statusPayload[0], 0, bitRead(limitStatus,8));                 // LIMIT_STATUS Bit 8 is AN2 (Open side) limit switch active
-  bitWrite(statusPayload[0], 1, bitRead(limitStatus,7));                 // LIMIT_STATUS Bit 7 is AN1 (Closed side) limit switch active
-  bitWrite(statusPayload[0], 2, motorSpeed < 0);                         // Negative motor speed is actively moving, opening the shutter
-  bitWrite(statusPayload[0], 3, motorSpeed > 0);                         // Negative motor speed is actively moving, opening the shutter  
-  bitWrite(statusPayload[0], 4, getSMCVariable(ERROR_STATUS) > 0);       // If ERROR_STATUS > 0, some error has occurred.
-  bitWrite(statusPayload[0], 5, (limitStatus == 0 && motorSpeed == 0));  // If no limit switch is active, and speed is 0, shutter is stopped between limits
+  // Stuff status byte 0
+  bitWrite(statusPayload[0], 0, bitRead(limitStatus,8));                  // LIMIT_STATUS Bit 8 is AN2 (Open side) limit switch active
+  bitWrite(statusPayload[0], 1, bitRead(limitStatus,7));                  // LIMIT_STATUS Bit 7 is AN1 (Closed side) limit switch active
+  bitWrite(statusPayload[0], 2, motorSpeed < 0);                          // Negative motor speed is actively moving, opening the shutter
+  bitWrite(statusPayload[0], 3, motorSpeed > 0);                          // Negative motor speed is actively moving, opening the shutter  
+  bitWrite(statusPayload[0], 4, errorStatus > 0);                         // If ERROR_STATUS > 0, some error has occurred.
+  bitWrite(statusPayload[0], 5, (limitStatus == 0 && motorSpeed == 0));   // If no limit switch is active, and speed is 0, shutter is stopped between limits
+
+  // Stuff status byte 1
+  bitWrite(statusPayload[1], 0, bitRead(errorStatus, 0));                  // Reference : https://www.pololu.com/docs/0J44/6.4
+  bitWrite(statusPayload[1], 1, bitRead(errorStatus, 2));
+  bitWrite(statusPayload[1], 2, bitRead(errorStatus, 4));
+  bitWrite(statusPayload[1], 3, bitRead(errorStatus, 5));
+  bitWrite(statusPayload[1], 4, bitRead(errorStatus, 6));
+  bitWrite(statusPayload[1], 5, bitRead(errorStatus, 7));
+  bitWrite(statusPayload[1], 6, bitRead(errorStatus, 8));
+  bitWrite(statusPayload[1], 7, bitRead(errorStatus, 9));
+
+  // Byte 2 is rounded temp from SMC
+  int temp = round(float(getSMCVariable(TEMPERATURE)) / 10);
+  statusPayload[2] = temp;
+
 }
 
 void setup(){
@@ -225,8 +253,8 @@ void loop(void)
         Serial.print(float(float(getSMCVariable(TEMPERATURE)) / 10),1);
         Serial.print(char(186));
         Serial.println("C");
-//        Serial.print("Error Status: 0x");
-//        Serial.println(getSMCVariable(ERROR_STATUS), BIN);
+        Serial.print("Error Status: 0x");
+        Serial.println(getSMCVariable(ERROR_STATUS), BIN);
         Serial.print("VIN = ");
         Serial.print(float(float(getSMCVariable(INPUT_VOLTAGE)) / 1000));
         Serial.println(" V");        
@@ -236,11 +264,21 @@ void loop(void)
         Serial.println(getSMCVariable(LIMIT_STATUS),BIN);
         Serial.print("Motor Speed = ");
         Serial.println(getSMCVariable(SPEED),DEC);
+        Serial.println();
         Serial.print("statusPayload[0] = ");
         Serial.print(statusPayload[0],DEC);
         Serial.print(" - ");
         Serial.println(statusPayload[0],BIN);
+        Serial.print("statusPayload[1] = ");
+        Serial.print(statusPayload[1],DEC);
+        Serial.print(" - ");
+        Serial.println(statusPayload[1],BIN);
+        Serial.print("statusPayload[2] = ");
+        Serial.print(statusPayload[2],DEC);
+        Serial.print(" - ");
+        Serial.println(statusPayload[2],BIN);
         Serial.println();
+
 
       }
   }
