@@ -31,7 +31,10 @@ SoftwareSerial smcSerial = SoftwareSerial(rxPin, txPin);
 
 // SMC Variable IDs
 #define ERROR_STATUS 0
-#define INPUT_VOLTAGE 23   //TODO Add byte for holding Input Voltage
+#define LIMIT_STATUS 3
+#define TARGET_SPEED 20
+#define SPEED 21
+#define INPUT_VOLTAGE 23
 #define TEMPERATURE 24
 
 // SMC motor limit IDs
@@ -45,6 +48,10 @@ SoftwareSerial smcSerial = SoftwareSerial(rxPin, txPin);
 byte statusPayload[3];
 byte pipeNum;
 byte cmd;
+
+// Timer variables for stuffStatus() call
+unsigned long lastMillis=0;
+unsigned long currentMillis=0;
 
 // read an SMC serial byte
 int readSMCByte()
@@ -97,32 +104,119 @@ int getSMCVariable(unsigned char variableID)
   return readSMCByte() + 256 * readSMCByte();
 }
 
-// handle commands received from RF24
-bool doCommand(byte command)
+// Stuff the statusPayload bytes
+/**********************************************************************
+  0 : Binary status indicators according to the following table
+    0   Shutter is Open
+    1   Shutter is Closed
+    2   Shutter is Opening
+    3   Shutter is Closing
+    4   Shutter Error (Any error.  Details in next byte)
+    5   Shutter is stopped (Neither open nor closed)
+    6   Reserved
+    7   Reserved
+  1 : Error byte.  Pulled from SMC Error Status, with some bits dropped
+    0   Safe Start Violation
+    1   Serial Error (Requires Exit from Safe Start AND valid speed command)
+    2   Limit switch active, and attempt has been made to move into it
+    3   Low VIN (VIN value in next byte)
+    4   High VIN (VIN value in next byte)
+    5   Over Temperature  (TODO Set threshold in GUI)
+    6   Motor Driver Error
+    7   ERR Line High (With no other error)
+  2 : Controller temperature
+
+**********************************************************************/
+
+void stuffStatus()
 {
-  if (char(command)=='o')                 //TODO: Change these to byte values, save time.
-  {
-    //setMotorSpeed(800);
-    Serial.println(F("Shutter Opening"));
-  }
+  statusPayload[0]=0;
+  uint16_t limitStatus = getSMCVariable(LIMIT_STATUS);
+  int motorSpeed = getSMCVariable(SPEED);
+  int errorStatus = getSMCVariable(ERROR_STATUS);
 
-  if (char(command)=='c')
-  {
-    //setMotorSpeed(-800);
-    Serial.println(F("Shutter Closing"));
-  }
+  // Stuff status byte 0
+  bitWrite(statusPayload[0], 0, bitRead(limitStatus,8));                  // LIMIT_STATUS Bit 8 is AN2 (Open side) limit switch active
+  bitWrite(statusPayload[0], 1, bitRead(limitStatus,7));                  // LIMIT_STATUS Bit 7 is AN1 (Closed side) limit switch active
+  bitWrite(statusPayload[0], 2, motorSpeed < 0);                          // Negative motor speed is actively moving, opening the shutter
+  bitWrite(statusPayload[0], 3, motorSpeed > 0);                          // Negative motor speed is actively moving, opening the shutter  
+  bitWrite(statusPayload[0], 4, errorStatus > 0);                         // If ERROR_STATUS > 0, some error has occurred.
+  bitWrite(statusPayload[0], 5, (limitStatus == 0 && motorSpeed == 0));   // If no limit switch is active, and speed is 0, shutter is stopped between limits
 
-  if (char(command)=='x')
-  {
-    //setMotorSpeed(0);
-    Serial.println(F("Shutter Halted"));
-  }
-  return true;
+  // Stuff status byte 1
+  bitWrite(statusPayload[1], 0, bitRead(errorStatus, 0));                  // Reference : https://www.pololu.com/docs/0J44/6.4
+  bitWrite(statusPayload[1], 1, bitRead(errorStatus, 2));
+  bitWrite(statusPayload[1], 2, bitRead(errorStatus, 4));
+  bitWrite(statusPayload[1], 3, bitRead(errorStatus, 5));
+  bitWrite(statusPayload[1], 4, bitRead(errorStatus, 6));
+  bitWrite(statusPayload[1], 5, bitRead(errorStatus, 7));
+  bitWrite(statusPayload[1], 6, bitRead(errorStatus, 8));
+  bitWrite(statusPayload[1], 7, bitRead(errorStatus, 9));
+
+  // Byte 2 is rounded temp from SMC
+  int temp = round(float(getSMCVariable(TEMPERATURE)) / 10);
+  statusPayload[2] = temp;
+
+////  radio.flush_rx();
+//  radio.writeAckPayload(1,statusPayload, 3 );
+
+  // DEBUG
+  // Serial.println("statusPayload stuffed");
+
 }
 
-void getStatus()
+void doCommand(byte command)
 {
+  if (command=='o')  
+   {
+     setMotorSpeed(-800);
+   }
   
+  if (command=='c')  
+   {
+     setMotorSpeed(800);
+   }
+  
+  if (command=='x')  
+   {
+     setMotorSpeed(0);
+   }
+  if (command=='r')
+    {
+        exitSafeStart();
+    }
+  if (command=='i')
+    {
+      Serial.print("Controller Temp : ");
+      Serial.print(float(float(getSMCVariable(TEMPERATURE)) / 10),1);
+      Serial.print(char(186));
+      Serial.println("C");
+      Serial.print("Error Status: 0x");
+      Serial.println(getSMCVariable(ERROR_STATUS), BIN);
+      Serial.print("VIN = ");
+      Serial.print(float(float(getSMCVariable(INPUT_VOLTAGE)) / 1000));
+      Serial.println(" V");        
+      Serial.print("Limit Status = ");
+      Serial.print(getSMCVariable(LIMIT_STATUS),DEC);
+      Serial.print(" - ");
+      Serial.println(getSMCVariable(LIMIT_STATUS),BIN);
+      Serial.print("Motor Speed = ");
+      Serial.println(getSMCVariable(SPEED),DEC);
+      Serial.println();
+      Serial.print("statusPayload[0] = ");
+      Serial.print(statusPayload[0],DEC);
+      Serial.print(" - ");
+      Serial.println(statusPayload[0],BIN);
+      Serial.print("statusPayload[1] = ");
+      Serial.print(statusPayload[1],DEC);
+      Serial.print(" - ");
+      Serial.println(statusPayload[1],BIN);
+      Serial.print("statusPayload[2] = ");
+      Serial.print(statusPayload[2],DEC);
+      Serial.print(" - ");
+      Serial.println(statusPayload[2],BIN);
+      Serial.println();
+    }
 }
 void setup(){
 
@@ -140,7 +234,7 @@ void setup(){
   delay(5);
 
   // this lets us read the state of the SMC ERR pin (optional)
-  pinMode(errPin, INPUT);
+  // pinMode(errPin, INPUT);
 
   smcSerial.write(0xAA);  // send baud-indicator byte
   setMotorLimit(FORWARD_ACCELERATION, 100);
@@ -151,7 +245,11 @@ void setup(){
   
   // clear the safe-start violation and let the motor run
   exitSafeStart();
-    
+
+  // Do our first stuffStatus
+  stuffStatus();
+  lastMillis = millis();             // We'll compare this in loop(), and poll status every 5s
+  
   // Setup and configure rf radio
 
   radio.begin();
@@ -165,28 +263,33 @@ void setup(){
   radio.setChannel(77);                   // In US, channel should be betwene 70-80
 //  radio.printDetails();                 // Dump the configuration of the rf unit 
                                           // for debugging
+  radio.flush_tx();
+  radio.writeAckPayload(1,statusPayload, 3 );
 }   //end setup
 
 void loop(void) 
 {
-  while( radio.available(&pipeNum))
+// SMC Error Status == 1 if only error is Safe Start Violation.  Since
+// all other errors are 0, it is safe to exit Safe Start
+
+  if (getSMCVariable(ERROR_STATUS) == 1) 
+  {
+    exitSafeStart();
+  }
+
+  currentMillis = millis();
+  if (currentMillis - lastMillis > 5000)
+  {
+    stuffStatus();
+    lastMillis = currentMillis;
+    radio.flush_tx();
+    radio.writeAckPayload(1,statusPayload, 3 );
+  }
+
+  while( radio.available())
   {
     radio.read( &cmd, 1 );
-//    doCommand(cmd);
-    statusPayload[0]=cmd; //binStatus;
-//    statusPayload[1]=tempStatus;
-//    statusPayload[2]=errorStatus;
-    radio.writeAckPayload(pipeNum,statusPayload, 3 );
+    doCommand(cmd);
+//    radio.writeAckPayload(pipeNum,statusPayload, 3 );
   }   //end while
-
-  // if an error is stopping the motor, write the error status variable
-  // and try to re-enable the motor
-  if (digitalRead(errPin) == HIGH)
-  {
-    Serial.print("Error Status: 0x");
-    Serial.println(getSMCVariable(ERROR_STATUS), DEC);
-    // once all other errors have been fixed,
-    // this lets the motors run again
-    exitSafeStart();
-  }   //end if
 }   //end loop

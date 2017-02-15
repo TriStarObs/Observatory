@@ -110,12 +110,12 @@ void serial_receive(void)
       {
         while(radio.available() )
         {
-          radio.read( statusBytes, 3 );
+          radio.read(statusBytes, 3 );
           Serial.print(F("Got response StatusByte - "));
           Serial.print(statusBytes[0]);
-          Serial.print(F(", TempByte - "));
-          Serial.print(statusBytes[1]); 
           Serial.print(F(", ErrorByte - "));
+          Serial.print(statusBytes[1]); 
+          Serial.print(F(", TempByte - "));
           Serial.println(statusBytes[2]); 
           Serial.println();
         }
