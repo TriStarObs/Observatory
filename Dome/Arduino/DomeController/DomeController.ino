@@ -14,7 +14,26 @@
  *************************************************************************/
 
 #include <SPI.h>
+#include <LCD.h>
+#include <LiquidCrystal_I2C.h>
 #include "RF24.h"
+#include <Wire.h>
+
+// LCD Pin assignments
+#define I2C_ADDR    0x27 
+#define BACKLIGHT_PIN     3
+#define BACKLIGHT_BRIGHTNESS    9
+#define En_pin  2
+#define Rw_pin  1
+#define Rs_pin  0
+#define D4_pin  4
+#define D5_pin  5
+#define D6_pin  6
+#define D7_pin  7
+
+
+// Create instance of LCD
+LiquidCrystal_I2C  lcd(I2C_ADDR,En_pin,Rw_pin,Rs_pin,D4_pin,D5_pin,D6_pin,D7_pin);
 
 // Hardware configuration: nRF24L01 radio on SPI bus plus pins 7 & 8 
 RF24 radio(7,8);
@@ -26,19 +45,20 @@ byte cmd=0;                               // Hold the command we're sending to t
                                           // x - Halt all shutter motion immediately
 
 byte statusBytes[3];                      // Array for shutter status
-                                          // [0] - Binary status info (TODO Table of bits)
-                                          // [1] - Controller temp
-                                          // [2] - Controller error info (TODO Build byte)
+                                          // [0] - Binary status info (Table of bits in shutter sketch)
+                                          // [1] - Specific Error Info
+                                          // [2] - Temp (°C, rounded to nearest int)
                                           
-// Serial handling variables
-boolean stringComplete = false;  // whether the string is complete
+// Variables
+boolean stringComplete = false;  
 char serialBuffer[2] = "";
 static int dataBufferIndex = 0;
+unsigned long prevMillis=0;
+unsigned long currentMillis=0;
+int i=0;                          // Every arduino program ever winds up needing a counter for something.
+bool displayLCD=0;                // TODO : Add driver code to toggle this.  We presume LCD desired == backlight desired
 
 void setup(){
-
-  Serial.begin(115200);
-  Serial.println(F("TriStar Observatory : Dome Primary Controller"));
 
   // Setup and configure rf radio
 
@@ -50,15 +70,52 @@ void setup(){
   radio.setDataRate(RF24_1MBPS);          // Works best, for some reason
   radio.setPALevel(RF24_PA_MIN);          // Problems with LOW?
   radio.setChannel(77);                   // In US, channel should be betwene 70-80
-//  radio.printDetails();                 // Dump the configuration of the rf unit 
-                                          // for debugging
 
-}
+  Serial.begin(115200);
+
+  if (displayLCD)                         //TODO Turn this into a function called whenever displayLCD is set on
+  {
+  lcd.begin (20,4);
+  lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
+  lcd.setBacklight(HIGH);
+  analogWrite(BACKLIGHT_BRIGHTNESS,128);
+  lcd.clear();
+  lcd.print("TriStar Observatory");
+  lcd.setCursor (0,1); 
+  lcd.print("Dome Control");
+  lcd.setCursor (0,2); 
+  
+    if (!radio.write( &cmd, 1 ))
+    {
+      lcd.print("No connection to shutter.");
+    }
+    else
+    {
+      lcd.print("Shutter connected.");
+      lcd.setCursor(0,3);
+
+      // Yes, we're intentionally faking a loading screen.
+      for (i=0; i++, i<=5;)                //See?  Told you.
+      {
+        lcd.print(".");
+        delay(750);
+      }
+      
+    }
+    lcd.clear();
+  }
+} // end setup()
 
 void loop(void) 
 {
+    currentMillis=millis();
+    if (currentMillis - prevMillis > 5000 && displayLCD)
+    {
+      prevMillis=currentMillis;
+    }
     serial_receive();
-} // End loop
+
+} // End loop()
 
 void serialEvent()
 // TODO : Handle buffer overflow from > 1 char before #
@@ -93,31 +150,70 @@ void serial_receive(void)
   if (stringComplete) 
   { 
     cmd = serialBuffer[0];
-    Serial.print(F("Sending:"));  
-    Serial.print(cmd);          
-    Serial.println();
+
+    if (displayLCD)
+    {
+      lcd.clear();
+      lcd.print("Sending command : ");
+      lcd.print(char(cmd));
+      lcd.setCursor(0,1);
+    }
+    else
+    {
+      Serial.print(F("Sending command:"));  
+      Serial.print(char(cmd));          
+      Serial.println();
+    }
     if (!radio.write( &cmd, 1 ))
     {
-      Serial.println(F("Send failed."));
+      if (displayLCD)
+      {
+        lcd.print("Sending of command failed.");
+        lcd.setCursor(0,2);
+      }
+      else
+      {
+        Serial.println(F("Sending of command failed."));  
+      }
+      
     }
     else
     {
       if(!radio.available())
       { 
-        Serial.println(F("Blank Payload Received.")); 
+        if (displayLCD)
+        {
+          lcd.print("Blank Payload.");
+          lcd.setCursor(0,3);
+        }
+        else
+        {
+          Serial.println(F("Blank Payload Received."));   
+        }
+        
       }
       else
       {
         while(radio.available() )
         {
           radio.read(statusBytes, 3 );
-          Serial.print(F("Got response StatusByte - "));
+          if (displayLCD)
+          {
+            lcd.print(statusBytes[0]);
+            lcd.print(" - ");
+            lcd.print(statusBytes[1]);
+            lcd.print(" - ");
+            lcd.print(statusBytes[2]);
+          }
+          else
+          {
           Serial.print(statusBytes[0]);
-          Serial.print(F(", ErrorByte - "));
+          Serial.print(F(" - "));
           Serial.print(statusBytes[1]); 
-          Serial.print(F(", TempByte - "));
+          Serial.print(F(" - "));
           Serial.println(statusBytes[2]); 
           Serial.println();
+          }
         }
       }
     }
