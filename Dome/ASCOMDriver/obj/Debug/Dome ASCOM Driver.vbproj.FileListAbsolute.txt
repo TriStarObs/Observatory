@@ -1,0 +1,16 @@
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\bin\Debug\ASCOM.TriStarObs.Dome.dll.config
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\bin\Debug\ASCOM.TriStarObs.Dome.dll
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\bin\Debug\ASCOM.TriStarObs.Dome.pdb
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\obj\Debug\ASCOM.TriStarObs.Resources.resources
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\obj\Debug\ASCOM.TriStarObs.SetupDialogForm.resources
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\obj\Debug\Dome ASCOM Driver.vbproj.GenerateResource.Cache
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\obj\Debug\ASCOM.TriStarObs.Dome.dll
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\obj\Debug\ASCOM.TriStarObs.Dome.pdb
+D:\Development\TriStarObservatory\Observatory\Dome\ASCOMDriver\Dome ASCOM Driver\bin\Debug\Dome ASCOM Driver.dll.config
+D:\Development\TriStarObservatory\Observatory\Dome\ASCOMDriver\Dome ASCOM Driver\bin\Debug\Dome ASCOM Driver.dll
+D:\Development\TriStarObservatory\Observatory\Dome\ASCOMDriver\Dome ASCOM Driver\bin\Debug\Dome ASCOM Driver.pdb
+D:\Development\TriStarObservatory\Observatory\Dome\ASCOMDriver\Dome ASCOM Driver\obj\Debug\ASCOM.TriStarObs.Resources.resources
+D:\Development\TriStarObservatory\Observatory\Dome\ASCOMDriver\Dome ASCOM Driver\obj\Debug\ASCOM.TriStarObs.SetupDialogForm.resources
+D:\Development\TriStarObservatory\Observatory\Dome\ASCOMDriver\Dome ASCOM Driver\obj\Debug\Dome ASCOM Driver.vbproj.GenerateResource.Cache
+D:\Development\TriStarObservatory\Observatory\Dome\ASCOMDriver\Dome ASCOM Driver\obj\Debug\Dome ASCOM Driver.dll
+D:\Development\TriStarObservatory\Observatory\Dome\ASCOMDriver\Dome ASCOM Driver\obj\Debug\Dome ASCOM Driver.pdb
