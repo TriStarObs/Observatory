@@ -47,7 +47,7 @@ SoftwareSerial smcSerial = SoftwareSerial(rxPin, txPin);
 // Variables for RF24 data
 byte statusPayload[3];
 byte pipeNum;
-byte cmd;
+byte cmd[4];
 
 // Timer variables for stuffStatus() call
 unsigned long lastMillis=0;
@@ -165,27 +165,25 @@ void stuffStatus()
 
 }
 
-void doCommand(byte command)
+void doCommand(String command)
 {
-  if (command=='o')  
-   {
-     setMotorSpeed(-800);
-   }
-  
-  if (command=='c')  
+  if (command=="clos")  
    {
      setMotorSpeed(800);
    }
-  
-  if (command=='x')  
+  else if (command=="open")  
+   {
+     setMotorSpeed(-800);
+   }
+  else if (command=="xxxx")  
    {
      setMotorSpeed(0);
    }
-  if (command=='r')
+  if (command=="rset")
     {
         exitSafeStart();
     }
-  if (command=='i')
+  else if (command=="info")
     {
       Serial.print("Controller Temp : ");
       Serial.print(float(float(getSMCVariable(TEMPERATURE)) / 10),1);
@@ -288,8 +286,11 @@ void loop(void)
 
   while( radio.available())
   {
-    radio.read( &cmd, 1 );
-    doCommand(cmd);
-//    radio.writeAckPayload(pipeNum,statusPayload, 3 );
+    radio.read( &cmd, 4 );
+    String theCommand = (char*)cmd;
+    theCommand.remove(4);
+    Serial.print("Received command : ");
+    Serial.println(theCommand);
+    doCommand(theCommand);
   }   //end while
 }   //end loop

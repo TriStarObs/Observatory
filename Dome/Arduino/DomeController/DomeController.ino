@@ -38,7 +38,8 @@ LiquidCrystal_I2C  lcd(I2C_ADDR,En_pin,Rw_pin,Rs_pin,D4_pin,D5_pin,D6_pin,D7_pin
 // Hardware configuration: nRF24L01 radio on SPI bus plus pins 7 & 8 
 RF24 radio(7,8);
 
-byte cmd=0;                               // Hold the command we're sending to the shutter
+String strCmd;
+byte cmd[5];                              // Hold the command we're sending to the shutter
                                           // c - Close shutter
                                           // o - Open shutter
                                           // s - Shutter status
@@ -50,11 +51,6 @@ byte statusBytes[3];                      // Array for shutter status
                                           // [2] - Temp (°C, rounded to nearest int)
                                           
 // Variables
-boolean stringComplete = false;  
-char serialBuffer[2] = "";
-static int dataBufferIndex = 0;
-unsigned long prevMillis=0;
-unsigned long currentMillis=0;
 int i=0;                          // Every arduino program ever winds up needing a counter for something.
 bool displayLCD=0;                // TODO : Add driver code to toggle this.  We presume LCD desired == backlight desired
 
@@ -65,7 +61,7 @@ void setup(){
   radio.begin();
   radio.enableAckPayload();               // Allow ack payloads
   radio.setRetries(0,15);                 // Min time between retries, max # of retries
-  radio.setPayloadSize(3);                // Ack Payload is 3 bytes.
+  radio.setPayloadSize(4);                // 4 byte commands
   radio.openWritingPipe(0xABCDABCD71LL);  // No need for a reading pipe for Ack payloads
   radio.setDataRate(RF24_1MBPS);          // Works best, for some reason
   radio.setPALevel(RF24_PA_MIN);          // Problems with LOW?
@@ -75,96 +71,66 @@ void setup(){
 
   if (displayLCD)                         //TODO Turn this into a function called whenever displayLCD is set on
   {
-  lcd.begin (20,4);
-  lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
-  lcd.setBacklight(HIGH);
-  analogWrite(BACKLIGHT_BRIGHTNESS,128);
-  lcd.clear();
-  lcd.print("TriStar Observatory");
-  lcd.setCursor (0,1); 
-  lcd.print("Dome Control");
-  lcd.setCursor (0,2); 
-  
-    if (!radio.write( &cmd, 1 ))
-    {
-      lcd.print("No connection to shutter.");
-    }
-    else
-    {
-      lcd.print("Shutter connected.");
-      lcd.setCursor(0,3);
-
-      // Yes, we're intentionally faking a loading screen.
-      for (i=0; i++, i<=5;)                //See?  Told you.
-      {
-        lcd.print(".");
-        delay(750);
-      }
-      
-    }
+    lcd.begin (20,4);
+    lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
+    lcd.setBacklight(HIGH);
+    analogWrite(BACKLIGHT_BRIGHTNESS,128);
     lcd.clear();
+    lcd.print("TriStar Observatory");
+    lcd.setCursor (0,1); 
+    lcd.print("Dome Control");
+    lcd.setCursor (0,2); 
+    
+      if (!radio.write( &cmd, 4 ))
+      {
+        lcd.print("No connection to shutter.");
+      }
+      else
+      {
+        lcd.print("Shutter connected.");
+        lcd.setCursor(0,3);
+  
+        // Yes, we're intentionally faking a loading screen.
+        for (i=0; i++, i<=5;)                //See?  Told you.
+        {
+          lcd.print(".");
+          delay(750);
+        }
+        
+      }
+      lcd.clear();
+  }
+  else
+  {
+    Serial.println("TriStar Observatory : Dome Primary Controller");
+      if (!radio.write( &cmd, 4 ))
+      {
+        Serial.println("No connection to shutter.");
+      }
+      else
+      {
+        Serial.println("Shutter connected.");
+ 
+        // Yes, we're intentionally faking a loading screen.
+        for (i=0; i++, i<=5;)                //See?  Told you.
+        {
+          Serial.print(".");
+          delay(750);
+        }
+        
+      }
+      Serial.println();
+    
   }
 } // end setup()
 
 void loop(void) 
 {
-    currentMillis=millis();
-    if (currentMillis - prevMillis > 5000 && displayLCD)
-    {
-      prevMillis=currentMillis;
-    }
-    serial_receive();
-
-} // End loop()
-
-void serialEvent()
-// TODO : Handle buffer overflow from > 1 char before #
-{
   while (Serial.available() > 0)
   {
-    char incomingByte = Serial.read();
-    
-    if(incomingByte=='#')                         // All TSO drivers term commands
-                                                  // with '#'
-    {
-      serialBuffer[dataBufferIndex] = 0; 
-      stringComplete = true;
+    Serial.readBytesUntil('#', cmd, 5);
 
-      // Clear any remaining characters in serial
-      delay(100);       // No idea why this is necessary, but it is.
-      while (Serial.available() > 0)
-      {
-        Serial.read();
-      }   //end while()
-    } 
-    else 
-    {
-      serialBuffer[dataBufferIndex++] = incomingByte;
-      serialBuffer[dataBufferIndex] = 0; 
-    }          
-  }   // end while()
-}   //end serialEvent()
-
-void serial_receive(void)
-{
-  if (stringComplete) 
-  { 
-    cmd = serialBuffer[0];
-
-    if (displayLCD)
-    {
-      lcd.clear();
-      lcd.print("Sending command : ");
-      lcd.print(char(cmd));
-      lcd.setCursor(0,1);
-    }
-    else
-    {
-      Serial.print(F("Sending command:"));  
-      Serial.print(char(cmd));          
-      Serial.println();
-    }
-    if (!radio.write( &cmd, 1 ))
+    if (!radio.write( &cmd, sizeof(cmd) ))
     {
       if (displayLCD)
       {
@@ -217,11 +183,13 @@ void serial_receive(void)
         }
       }
     }
-    stringComplete = false;
-    dataBufferIndex = 0;
-    serialBuffer[dataBufferIndex]=0;
-  } // end is string complete
-} // end serial_receive()   
-  
-  
+
+
+
+
+
+    
+  } // end while
+} // End loop()
+
 
