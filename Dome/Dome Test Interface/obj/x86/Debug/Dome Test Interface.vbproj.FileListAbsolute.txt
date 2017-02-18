@@ -1,0 +1,11 @@
+D:\Development\TriStarObservatory\Observatory\Dome\Dome Test Interface\bin\Debug\ASCOM.TriStarObs.Test.exe.config
+D:\Development\TriStarObservatory\Observatory\Dome\Dome Test Interface\bin\Debug\ASCOM.TriStarObs.Test.exe
+D:\Development\TriStarObservatory\Observatory\Dome\Dome Test Interface\bin\Debug\ASCOM.TriStarObs.Test.pdb
+D:\Development\TriStarObservatory\Observatory\Dome\Dome Test Interface\bin\Debug\ASCOM.TriStarObs.Test.xml
+D:\Development\TriStarObservatory\Observatory\Dome\Dome Test Interface\obj\x86\Debug\Dome Test Interface.vbprojResolveAssemblyReference.cache
+D:\Development\TriStarObservatory\Observatory\Dome\Dome Test Interface\obj\x86\Debug\ASCOM.TriStarObs.Resources.resources
+D:\Development\TriStarObservatory\Observatory\Dome\Dome Test Interface\obj\x86\Debug\Dome Test Interface.vbproj.GenerateResource.Cache
+D:\Development\TriStarObservatory\Observatory\Dome\Dome Test Interface\obj\x86\Debug\ASCOM.TriStarObs.Test.exe
+D:\Development\TriStarObservatory\Observatory\Dome\Dome Test Interface\obj\x86\Debug\ASCOM.TriStarObs.Test.xml
+D:\Development\TriStarObservatory\Observatory\Dome\Dome Test Interface\obj\x86\Debug\ASCOM.TriStarObs.Test.pdb
+D:\Development\TriStarObservatory\Observatory\Dome\Dome Test Interface\obj\x86\Debug\ASCOM.TriStarObs.frmTest.resources

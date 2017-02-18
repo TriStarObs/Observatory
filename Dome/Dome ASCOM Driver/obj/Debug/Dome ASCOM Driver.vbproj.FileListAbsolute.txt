@@ -1,0 +1,19 @@
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\bin\Debug\ASCOM.TristarObs.Dome.dll.config
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\bin\Debug\ASCOM.TristarObs.Dome.dll
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\bin\Debug\ASCOM.TristarObs.Dome.pdb
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\bin\Debug\ASCOM.TristarObs.Dome.tlb
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\obj\Debug\ASCOM.TristarObs.Resources.resources
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\obj\Debug\ASCOM.TristarObs.SetupDialogForm.resources
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\obj\Debug\Dome ASCOM Driver.vbproj.GenerateResource.Cache
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\obj\Debug\ASCOM.TristarObs.Dome.dll
+C:\Users\EorEquis\AppData\Local\Temporary Projects\Dome ASCOM Driver\obj\Debug\ASCOM.TristarObs.Dome.pdb
+D:\Development\TriStarObservatory\Observatory\Dome\Dome ASCOM Driver\bin\Debug\Dome ASCOM Driver.dll.config
+D:\Development\TriStarObservatory\Observatory\Dome\Dome ASCOM Driver\bin\Debug\Dome ASCOM Driver.dll
+D:\Development\TriStarObservatory\Observatory\Dome\Dome ASCOM Driver\bin\Debug\Dome ASCOM Driver.pdb
+D:\Development\TriStarObservatory\Observatory\Dome\Dome ASCOM Driver\bin\Debug\Dome ASCOM Driver.tlb
+D:\Development\TriStarObservatory\Observatory\Dome\Dome ASCOM Driver\obj\Debug\ASCOM.TristarObs.Resources.resources
+D:\Development\TriStarObservatory\Observatory\Dome\Dome ASCOM Driver\obj\Debug\ASCOM.TristarObs.SetupDialogForm.resources
+D:\Development\TriStarObservatory\Observatory\Dome\Dome ASCOM Driver\obj\Debug\Dome ASCOM Driver.vbproj.GenerateResource.Cache
+D:\Development\TriStarObservatory\Observatory\Dome\Dome ASCOM Driver\obj\Debug\Dome ASCOM Driver.dll
+D:\Development\TriStarObservatory\Observatory\Dome\Dome ASCOM Driver\obj\Debug\Dome ASCOM Driver.pdb
+D:\Development\TriStarObservatory\Observatory\Dome\Dome ASCOM Driver\obj\Debug\Dome ASCOM Driver.vbprojResolveAssemblyReference.cache
