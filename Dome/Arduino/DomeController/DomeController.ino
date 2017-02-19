@@ -52,7 +52,7 @@ byte statusBytes[3];                      // Array for shutter status
                                           
 // Variables
 int i=0;                          // Every arduino program ever winds up needing a counter for something.
-bool displayLCD=0;                // TODO : Add driver code to toggle this.  We presume LCD desired == backlight desired
+bool displayLCD=1;                // TODO : Add driver code to toggle this.  We presume LCD desired == backlight desired
 
 void setup(){
 
@@ -183,12 +183,7 @@ void loop(void)
         }
       }
     }
-
-
-
-
-
-    
+   
   } // end while
 } // End loop()
 

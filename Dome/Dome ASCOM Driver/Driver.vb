@@ -1,34 +1,23 @@
 'tabs=4
 ' --------------------------------------------------------------------------------
-' TODO fill in this information for your driver, then remove this line!
 '
 ' ASCOM Dome driver for TristarObs
 '
-' Description:	Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam 
-'				nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam 
-'				erat, sed diam voluptua. At vero eos et accusam et justo duo 
-'				dolores et ea rebum. Stet clita kasd gubergren, no sea takimata 
-'				sanctus est Lorem ipsum dolor sit amet.
+' Description:	ASCOM Dome driver for TriStar Observatory
 '
 ' Implements:	ASCOM Dome interface version: 1.0
-' Author:		(XXX) Your N. Here <your@email.here>
+' Author:		(Eor) EorEquis@tristarobservatory.space
 '
 ' Edit Log:
 '
 ' Date			Who	Vers	Description
 ' -----------	---	-----	-------------------------------------------------------
-' dd-mmm-yyyy	XXX	1.0.0	Initial edit, from Dome template
+' 18-FEB-2017	Eor	0.1.0	Initial edit, from Dome template
 ' ---------------------------------------------------------------------------------
 '
 '
-' Your driver's ID is ASCOM.TristarObs.Dome
+' Driver ID : ASCOM.TristarObs.Dome
 '
-' The Guid attribute sets the CLSID for ASCOM.DeviceName.Dome
-' The ClassInterface/None addribute prevents an empty interface called
-' _Dome from being created and used as the [default] interface
-'
-
-' This definition is used to select code that's only applicable for one device type
 #Const Device = "Dome"
 
 Imports ASCOM
@@ -51,10 +40,6 @@ Public Class Dome
     ' The Guid attribute sets the CLSID for ASCOM.TristarObs.Dome
     ' The ClassInterface/None addribute prevents an empty interface called
     ' _TristarObs from being created and used as the [default] interface
-
-    ' TODO Replace the not implemented exceptions with code to implement the function or
-    ' throw the appropriate ASCOM exception.
-    '
     Implements IDomeV2
 
     '
