@@ -31,7 +31,6 @@
 #define D6_pin  6
 #define D7_pin  7
 
-
 // Create instance of LCD
 LiquidCrystal_I2C  lcd(I2C_ADDR,En_pin,Rw_pin,Rs_pin,D4_pin,D5_pin,D6_pin,D7_pin);
 
@@ -51,8 +50,41 @@ byte statusBytes[3];                      // Array for shutter status
                                           // [2] - Temp (°C, rounded to nearest int)
                                           
 // Variables
-int i=0;                          // Every arduino program ever winds up needing a counter for something.
-bool displayLCD=1;                // TODO : Add driver code to toggle this.  We presume LCD desired == backlight desired
+
+// Functions
+
+boolean sendShutter(byte (&cmdArray)[5])
+{
+  if (!radio.write( &cmdArray, sizeof(cmdArray) ))
+  {
+    lcd.print("Sending of shutter");
+    lcd.setCursor(0,1);
+    lcd.print("command failed.");
+    return false;
+  }
+  else
+  {
+    if(!radio.available())
+    { 
+      lcd.clear();
+      lcd.print("Blank Payload.");
+    }
+    else
+    {
+      lcd.clear();
+      while(radio.available() )
+      {
+        radio.read(statusBytes, 3 );
+        lcd.print(statusBytes[0]);
+        lcd.print(" - ");
+        lcd.print(statusBytes[1]);
+        lcd.print(" - ");
+        lcd.print(statusBytes[2]);
+      }
+    }
+    return true;
+  }
+}
 
 void setup(){
 
@@ -69,59 +101,33 @@ void setup(){
 
   Serial.begin(115200);
 
-  if (displayLCD)                         //TODO Turn this into a function called whenever displayLCD is set on
-  {
-    lcd.begin (20,4);
-    lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
-    lcd.setBacklight(HIGH);
-    analogWrite(BACKLIGHT_BRIGHTNESS,128);
-    lcd.clear();
-    lcd.print("TriStar Observatory");
-    lcd.setCursor (0,1); 
-    lcd.print("Dome Control");
-    lcd.setCursor (0,2); 
-    
-      if (!radio.write( &cmd, 4 ))
-      {
-        lcd.print("No connection to shutter.");
-      }
-      else
-      {
-        lcd.print("Shutter connected.");
-        lcd.setCursor(0,3);
+  lcd.begin (20,4);
+  lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
+  lcd.setBacklight(HIGH);
+  analogWrite(BACKLIGHT_BRIGHTNESS,128);
+  lcd.clear();
+  lcd.print("TriStar Observatory");
+  lcd.setCursor (0,1); 
+  lcd.print("Dome Control");
+  lcd.setCursor (0,2); 
   
-        // Yes, we're intentionally faking a loading screen.
-        for (i=0; i++, i<=5;)                //See?  Told you.
-        {
-          lcd.print(".");
-          delay(750);
-        }
-        
-      }
-      lcd.clear();
-  }
-  else
-  {
-    Serial.println("TriStar Observatory : Dome Primary Controller");
-      if (!radio.write( &cmd, 4 ))
-      {
-        Serial.println("No connection to shutter.");
-      }
-      else
-      {
-        Serial.println("Shutter connected.");
- 
-        // Yes, we're intentionally faking a loading screen.
-        for (i=0; i++, i<=5;)                //See?  Told you.
-        {
-          Serial.print(".");
-          delay(750);
-        }
-        
-      }
-      Serial.println();
-    
-  }
+    if (!radio.write( &cmd, 4 ))
+    {
+      lcd.print("No connection to shutter.");
+    }
+    else
+    {
+      lcd.print("Shutter connected.");
+      lcd.setCursor(0,3);
+      radio.read(statusBytes, 3 );
+      lcd.print(statusBytes[0]);
+      lcd.print(" - ");
+      lcd.print(statusBytes[1]);
+      lcd.print(" - ");
+      lcd.print(statusBytes[2]);
+      delay(3000);
+    }
+  lcd.clear();
 } // end setup()
 
 void loop(void) 
@@ -129,62 +135,29 @@ void loop(void)
   while (Serial.available() > 0)
   {
     Serial.readBytesUntil('#', cmd, 5);
-
-    if (!radio.write( &cmd, sizeof(cmd) ))
+    strCmd = (char*)cmd;
+    if (strCmd == "info")
     {
-      if (displayLCD)
-      {
-        lcd.print("Sending of command failed.");
-        lcd.setCursor(0,2);
-      }
-      else
-      {
-        Serial.println(F("Sending of command failed."));  
-      }
-      
+      Serial.println("status#");
+//      for (int i=0; i<=1; i++)
+//      {
+//        Serial.print(statusBytes[i]);
+//        Serial.print(',');  
+//      }
+//      Serial.print(statusBytes[2]);
+//      Serial.print('#');
+      lcd.clear();
+      lcd.print("Got tick");
+    }
+    else if (strCmd.startsWith("s"))
+    {
+      sendShutter(cmd);        //TODO : Write this function.
     }
     else
     {
-      if(!radio.available())
-      { 
-        if (displayLCD)
-        {
-          lcd.print("Blank Payload.");
-          lcd.setCursor(0,3);
-        }
-        else
-        {
-          Serial.println(F("Blank Payload Received."));   
-        }
-        
-      }
-      else
-      {
-        while(radio.available() )
-        {
-          radio.read(statusBytes, 3 );
-          if (displayLCD)
-          {
-            lcd.print(statusBytes[0]);
-            lcd.print(" - ");
-            lcd.print(statusBytes[1]);
-            lcd.print(" - ");
-            lcd.print(statusBytes[2]);
-          }
-          else
-          {
-          Serial.print(statusBytes[0]);
-          Serial.print(F(" - "));
-          Serial.print(statusBytes[1]); 
-          Serial.print(F(" - "));
-          Serial.println(statusBytes[2]); 
-          Serial.println();
-          }
-        }
-      }
+        //stuff that involves getting info or rotating the dome.
     }
-   
-  } // end while
+  }
 } // End loop()
 
 

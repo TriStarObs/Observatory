@@ -131,6 +131,8 @@ int getSMCVariable(unsigned char variableID)
 void stuffStatus()
 {
   statusPayload[0]=0;
+  statusPayload[1]=0;
+  statusPayload[2]=0;
   uint16_t limitStatus = getSMCVariable(LIMIT_STATUS);
   int motorSpeed = getSMCVariable(SPEED);
   int errorStatus = getSMCVariable(ERROR_STATUS);
@@ -167,11 +169,11 @@ void stuffStatus()
 
 void doCommand(String command)
 {
-  if (command=="clos")  
+  if (command=="shcl")  
    {
      setMotorSpeed(800);
    }
-  else if (command=="open")  
+  else if (command=="shop")  
    {
      setMotorSpeed(-800);
    }
@@ -183,7 +185,7 @@ void doCommand(String command)
     {
         exitSafeStart();
     }
-  else if (command=="info")
+  else if (command=="snfo")
     {
       Serial.print("Controller Temp : ");
       Serial.print(float(float(getSMCVariable(TEMPERATURE)) / 10),1);
@@ -276,7 +278,7 @@ void loop(void)
   }
 
   currentMillis = millis();
-  if (currentMillis - lastMillis > 5000)
+  if (currentMillis - lastMillis > 1000)
   {
     stuffStatus();
     lastMillis = currentMillis;

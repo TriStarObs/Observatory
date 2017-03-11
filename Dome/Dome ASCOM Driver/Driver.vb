@@ -36,7 +36,6 @@ Imports System.Text
 <Guid("fad9f7cd-358c-4519-9e2f-ec9275a2750d")> _
 <ClassInterface(ClassInterfaceType.None)> _
 Public Class Dome
-
     ' The Guid attribute sets the CLSID for ASCOM.TristarObs.Dome
     ' The ClassInterface/None addribute prevents an empty interface called
     ' _TristarObs from being created and used as the [default] interface
@@ -63,6 +62,8 @@ Public Class Dome
     Private TL As TraceLogger ' Private variable to hold the trace logger object (creates a diagnostic log file with information that you specify)
     Private objSerial As ASCOM.Utilities.Serial
 
+    Dim WithEvents Timer1 As New System.Timers.Timer
+
     '
     ' Constructor - Must be public for COM registration!
     '
@@ -76,8 +77,6 @@ Public Class Dome
         connectedState = False ' Initialise connected to false
         utilities = New Util() ' Initialise util object
         astroUtilities = New AstroUtils 'Initialise new astro utiliites object
-
-        'TODO: Implement your additional construction here
 
         TL.LogMessage("Dome", "Completed initialisation")
     End Sub
@@ -107,6 +106,7 @@ Public Class Dome
             Dim ActionsList As New ArrayList
             ActionsList.Add("Dome:StopShutter")
             ActionsList.Add("Dome:ResetShutter")
+            ActionsList.Add("Dome:GetStatus")
             Return ActionsList
         End Get
     End Property
@@ -127,6 +127,14 @@ Public Class Dome
                 Catch ex As Exception
                     Throw New ApplicationException("Unable to reset shutter", ex)
                 End Try
+            Case "GetStatus"
+                Try
+                    Dim strStatus As String
+                    strStatus = CommandString("snfo#")
+                    Return strStatus
+                Catch ex As Exception
+                    Throw New ApplicationException("Unable to get status", ex)
+                End Try
 
             Case Else
                 Throw New ActionNotImplementedException("Action " & ActionName & " is not supported by this driver")
@@ -136,9 +144,9 @@ Public Class Dome
     Public Sub CommandBlind(ByVal Command As String, Optional ByVal Raw As Boolean = False) Implements IDomeV2.CommandBlind
         Try
             CheckConnected("CommandBlind")
-            CommandString(Command, Raw)
+            objSerial.Transmit(Command)
         Catch ex As Exception
-            Throw New ApplicationException("Sending of command failed.", ex)
+            Throw New ApplicationException("CommandBlind failed.", ex)
         End Try
     End Sub
 
@@ -155,12 +163,15 @@ Public Class Dome
         Implements IDomeV2.CommandString
         ' TODO : something to ensure that only one command is in progress at a time
         Try
+            Dim response As String
             CheckConnected("CommandString")
             objSerial.Transmit(Command)
-            ' TODO : Code to handle return value from Arduino and return it
-            Return "Nothing"
+            response = objSerial.ReceiveTerminated("#")
+            response = response.Replace("#", "")
+            Return response
         Catch ex As Exception
-            Throw New ApplicationException("Sending of command failed.", ex)
+            Return "255"
+            ' Throw New ApplicationException("CommandString failed.", ex)
         End Try
     End Function
 
@@ -247,7 +258,7 @@ Public Class Dome
 
 #Region "IDome Implementation"
 
-    Private domeShutterState As Boolean = False ' Variable to hold the open/closed status of the shutter, true = Open
+    ' Private domeShutterState As Boolean = False ' Variable to hold the open/closed status of the shutter, true = Open
 
     Public Sub AbortSlew() Implements IDomeV2.AbortSlew
         ' TODO : Slew abort code for dome.  Also see if this stops the shutter
@@ -350,9 +361,9 @@ Public Class Dome
     End Property
 
     Public Sub CloseShutter() Implements IDomeV2.CloseShutter
-        CommandBlind("clos#", True)
+        CommandBlind("shcl#", True)
         TL.LogMessage("CloseShutter", "Shutter has been closed")
-        domeShutterState = False
+        'domeShutterState = False
     End Sub
 
     Public Sub FindHome() Implements IDomeV2.FindHome
@@ -363,8 +374,8 @@ Public Class Dome
 
     Public Sub OpenShutter() Implements IDomeV2.OpenShutter
         TL.LogMessage("OpenShutter", "Shutter has been opened")
-        CommandBlind("open#", True)
-        domeShutterState = True
+        CommandBlind("shop#", True)
+        'domeShutterState = True
     End Sub
 
     Public Sub Park() Implements IDomeV2.Park
@@ -381,12 +392,29 @@ Public Class Dome
 
     Public ReadOnly Property ShutterStatus() As ShutterState Implements IDomeV2.ShutterStatus
         Get
-            If (domeShutterState) Then
-                TL.LogMessage("ShutterStatus", ShutterState.shutterOpen.ToString())
-                Return ShutterState.shutterOpen
+
+            Dim intShutterStatus As Integer = CInt(CommandString("snfo#"))
+            If intShutterStatus = 255 Then
+                Return ShutterState.shutterError
             Else
-                TL.LogMessage("ShutterStatus", ShutterState.shutterClosed.ToString())
-                Return ShutterState.shutterClosed
+                Dim strBinary As String = Convert.ToString(intShutterStatus, 2).PadLeft(8, "0"c)
+                strBinary = StrReverse(strBinary)
+                If GetBit(strBinary, 4) Or GetBit(strBinary, 5) Then
+                    TL.LogMessage("shutterstatus", ShutterState.shutterError.ToString())
+                    Return ShutterState.shutterError
+                ElseIf GetBit(strBinary, 0) Then
+                    TL.LogMessage("shutterstatus", ShutterState.shutterOpen.ToString())
+                    Return ShutterState.shutterOpen
+                ElseIf GetBit(strBinary, 1) Then
+                    TL.LogMessage("shutterstatus", ShutterState.shutterClosed.ToString())
+                    Return ShutterState.shutterClosed
+                ElseIf GetBit(strBinary, 2) Then
+                    TL.LogMessage("shutterstatus", ShutterState.shutterOpening.ToString())
+                    Return ShutterState.shutterOpening
+                ElseIf GetBit(strBinary, 3) Then
+                    TL.LogMessage("shutterstatus", ShutterState.shutterClosing.ToString())
+                    Return ShutterState.shutterClosing
+                End If
             End If
         End Get
     End Property
@@ -492,6 +520,10 @@ Public Class Dome
         End Using
 
     End Sub
+
+    Private Function GetBit(ByVal BinaryString As String, ByVal position As Integer) As Boolean
+        Return (Mid(BinaryString, position + 1, 1) = "1")
+    End Function
 
 #End Region
 

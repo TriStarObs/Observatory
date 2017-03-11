@@ -22,6 +22,7 @@ Partial Class frmTest
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
+        Me.components = New System.ComponentModel.Container()
         Me.labelDriverId = New System.Windows.Forms.Label()
         Me.buttonConnect = New System.Windows.Forms.Button()
         Me.buttonChoose = New System.Windows.Forms.Button()
@@ -29,6 +30,9 @@ Partial Class frmTest
         Me.btnCloseShutter = New System.Windows.Forms.Button()
         Me.btnResetShutter = New System.Windows.Forms.Button()
         Me.btnStopShutter = New System.Windows.Forms.Button()
+        Me.txtStatus = New System.Windows.Forms.TextBox()
+        Me.btnStatus = New System.Windows.Forms.Button()
+        Me.Timer1 = New System.Windows.Forms.Timer(Me.components)
         Me.SuspendLayout()
         '
         'labelDriverId
@@ -99,11 +103,29 @@ Partial Class frmTest
         Me.btnStopShutter.Text = "Stop Shutter"
         Me.btnStopShutter.UseVisualStyleBackColor = True
         '
+        'txtStatus
+        '
+        Me.txtStatus.Location = New System.Drawing.Point(370, 195)
+        Me.txtStatus.Name = "txtStatus"
+        Me.txtStatus.Size = New System.Drawing.Size(315, 29)
+        Me.txtStatus.TabIndex = 10
+        '
+        'btnStatus
+        '
+        Me.btnStatus.Location = New System.Drawing.Point(22, 383)
+        Me.btnStatus.Name = "btnStatus"
+        Me.btnStatus.Size = New System.Drawing.Size(239, 50)
+        Me.btnStatus.TabIndex = 11
+        Me.btnStatus.Text = "Get Status"
+        Me.btnStatus.UseVisualStyleBackColor = True
+        '
         'frmTest
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(11.0!, 24.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(733, 430)
+        Me.ClientSize = New System.Drawing.Size(733, 517)
+        Me.Controls.Add(Me.btnStatus)
+        Me.Controls.Add(Me.txtStatus)
         Me.Controls.Add(Me.btnStopShutter)
         Me.Controls.Add(Me.btnResetShutter)
         Me.Controls.Add(Me.btnCloseShutter)
@@ -115,6 +137,7 @@ Partial Class frmTest
         Me.Name = "frmTest"
         Me.Text = "Dome Driver Test Client"
         Me.ResumeLayout(False)
+        Me.PerformLayout()
 
     End Sub
     Private WithEvents labelDriverId As System.Windows.Forms.Label
@@ -124,5 +147,8 @@ Partial Class frmTest
     Friend WithEvents btnCloseShutter As System.Windows.Forms.Button
     Friend WithEvents btnResetShutter As System.Windows.Forms.Button
     Friend WithEvents btnStopShutter As System.Windows.Forms.Button
+    Friend WithEvents txtStatus As System.Windows.Forms.TextBox
+    Friend WithEvents btnStatus As System.Windows.Forms.Button
+    Friend WithEvents Timer1 As System.Windows.Forms.Timer
 
 End Class
