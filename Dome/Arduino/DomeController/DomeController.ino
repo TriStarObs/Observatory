@@ -64,7 +64,8 @@ SoftwareSerial smcSerial = SoftwareSerial(rxPin, txPin);
 #define REVERSE_DECELERATION 10
 #define DECELERATION 2
 
-int Azimuth = 0;
+float Azimuth = 0.0;
+float slewDest = 0.0;
 
 // read an SMC serial byte
 int readSMCByte()
@@ -169,6 +170,10 @@ boolean sendShutter(byte (&cmdArray)[5])
   }
 }
 
+void slewToAzimuth(float slewTo)
+{
+    setMotorSpeed(800);  
+}
 void sendDome(String command)
 {
 //  Serial.print("Got command ");
@@ -179,9 +184,14 @@ void sendDome(String command)
     Serial.print(Azimuth);
     Serial.println("#");
   }
-  else if (command=="dneg")
+  else if (command.startsWith("m"))
   {
-    setMotorSpeed(-800);
+    slewDest = command.substring(1).toFloat();
+    if (Azimuth != slewDest)
+    {
+      slewToAzimuth();
+    }
+    
   }
   else if (command=="dpos")
   {
@@ -202,7 +212,11 @@ if (interrupt_time - last_interrupt_time > 400)
  
 //  if (getSMCVariable(SPEED) > 0)
   {
-    Azimuth = Azimuth + 5;
+    Azimuth = Azimuth + 5.0;
+    if (Azimuth >=360.0)
+    {
+      Azimuth = 0.0 + (Azimuth - 360.0);
+    }
   }
 //  else
 //  {
@@ -279,6 +293,14 @@ void setup(){
 
 void loop(void) 
 {
+  if (getSMCVariable(SPEED) != 0)
+  {
+    // Dome is turning, handle this first
+    if (Azimuth = slewDest)       // This may need to be changed, depending on timing.
+    {
+      setMotorSpeed(0);
+    }
+  }
   while (Serial.available() > 0)
   {
     Serial.readBytesUntil('#', cmd, 5);
@@ -296,9 +318,9 @@ void loop(void)
     {
         sendDome(strCmd);
     }
-    lcd.clear();
-    lcd.print("Rcv Cmd : ");
-    lcd.print(strCmd);
+//    lcd.clear();
+//    lcd.print("Rcv Cmd : ");
+//    lcd.print(strCmd);
 //    delay(100);       // No idea why this is necessary, but it is.
 //    while (Serial.available() > 0)
 //    {

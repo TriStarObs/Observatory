@@ -449,9 +449,9 @@ Public Class Dome
     End Sub
 
     Public Sub SlewToAzimuth(Azimuth As Double) Implements IDomeV2.SlewToAzimuth
-        ' TODO : Implement
-        TL.LogMessage("SlewToAzimuth", "Not implemented")
-        Throw New ASCOM.MethodNotImplementedException("SlewToAzimuth")
+        CommandBlind("m" & Azimuth.ToString & "#")
+        TL.LogMessage("SlewToAzimuth", "Slew to " & Azimuth.ToString)
+        'Throw New ASCOM.MethodNotImplementedException("SlewToAzimuth")
     End Sub
 
     Public ReadOnly Property Slewing() As Boolean Implements IDomeV2.Slewing
