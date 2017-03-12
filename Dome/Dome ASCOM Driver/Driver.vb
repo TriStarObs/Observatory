@@ -259,6 +259,7 @@ Public Class Dome
 #Region "IDome Implementation"
 
     ' Private domeShutterState As Boolean = False ' Variable to hold the open/closed status of the shutter, true = Open
+    Private dblAzimuth As Double = 0
 
     Public Sub AbortSlew() Implements IDomeV2.AbortSlew
         ' TODO : Slew abort code for dome.  Also see if this stops the shutter
@@ -291,9 +292,9 @@ Public Class Dome
 
     Public ReadOnly Property Azimuth() As Double Implements IDomeV2.Azimuth
         Get
-            ' TODO : Implement
-            TL.LogMessage("Azimuth", "Not implemented")
-            Throw New ASCOM.PropertyNotImplementedException("Azimuth", False)
+            dblAzimuth = CDbl(CommandString("dazm#", True))
+            TL.LogMessage("Azimuth", dblAzimuth.ToString)
+            Return dblAzimuth
         End Get
     End Property
 
@@ -375,7 +376,6 @@ Public Class Dome
     Public Sub OpenShutter() Implements IDomeV2.OpenShutter
         TL.LogMessage("OpenShutter", "Shutter has been opened")
         CommandBlind("shop#", True)
-        'domeShutterState = True
     End Sub
 
     Public Sub Park() Implements IDomeV2.Park

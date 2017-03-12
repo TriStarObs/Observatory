@@ -16,6 +16,7 @@
 #include <SPI.h>
 #include <LCD.h>
 #include <LiquidCrystal_I2C.h>
+#include <SoftwareSerial.h>
 #include "RF24.h"
 #include <Wire.h>
 
@@ -31,8 +32,90 @@
 #define D6_pin  6
 #define D7_pin  7
 
+// Interrupt for azimuth encoder
+const byte interruptPin = 3;
+static unsigned long last_interrupt_time = 0;
+unsigned long interrupt_time;
+
 // Create instance of LCD
 LiquidCrystal_I2C  lcd(I2C_ADDR,En_pin,Rw_pin,Rs_pin,D4_pin,D5_pin,D6_pin,D7_pin);
+
+// Pololu SMC config
+const int rxPin = 10;          // pin 10 connects to SMC TX
+const int txPin = 4;          // pin 4 connects to SMC RX
+const int resetPin = 5;       // pin 5 connects to SMC nRST
+const int errPin = 6;         // pin 6 connects to SMC ERR
+
+// Setup SoftwareSerial for communication w/ SMC
+SoftwareSerial smcSerial = SoftwareSerial(rxPin, txPin);
+
+// SMC Variable IDs
+#define ERROR_STATUS 0
+#define LIMIT_STATUS 3
+#define TARGET_SPEED 20
+#define SPEED 21
+#define INPUT_VOLTAGE 23
+#define TEMPERATURE 24
+
+// SMC motor limit IDs
+#define FORWARD_ACCELERATION 5
+#define FORWARD_DECELERATION 6
+#define REVERSE_ACCELERATION 9
+#define REVERSE_DECELERATION 10
+#define DECELERATION 2
+
+int Azimuth = 0;
+
+// read an SMC serial byte
+int readSMCByte()
+{
+  char c;
+  if(smcSerial.readBytes(&c, 1) == 0){ return -1; }
+  return (byte)c;
+}
+
+// required to allow motor to move
+// must be called when controller restarts and after any error
+void exitSafeStart()
+{
+  smcSerial.write(0x83);
+}
+
+// speed should be a number from -3200 to 3200
+// TODO : I'll be using a set speed, so this can probbaly go away to save mem.
+void setMotorSpeed(int speed)
+{
+  if (speed < 0)
+  {
+    smcSerial.write(0x86);  // motor reverse command
+    speed = -speed;  // make speed positive
+  }
+  else
+  {
+    smcSerial.write(0x85);  // motor forward command
+  }
+  smcSerial.write(speed & 0x1F);
+  smcSerial.write(speed >> 5);
+}
+
+unsigned char setMotorLimit(unsigned char  limitID, unsigned int limitValue)
+{
+  smcSerial.write(0xA2);
+  smcSerial.write(limitID);
+  smcSerial.write(limitValue & 0x7F);
+  smcSerial.write(limitValue >> 7);
+  return readSMCByte();
+}
+
+// returns the specified variable as an unsigned integer.
+// if the requested variable is signed, the value returned by this function
+// should be typecast as an int.
+int getSMCVariable(unsigned char variableID)
+{
+  smcSerial.write(0xA1);
+  smcSerial.write(variableID);
+  return readSMCByte() + 256 * readSMCByte();
+}
 
 // Hardware configuration: nRF24L01 radio on SPI bus plus pins 7 & 8 
 RF24 radio(7,8);
@@ -86,7 +169,53 @@ boolean sendShutter(byte (&cmdArray)[5])
   }
 }
 
+void sendDome(String command)
+{
+//  Serial.print("Got command ");
+//  Serial.println(command);
+  if (command=="dazm")
+  {
+    Serial.print(Azimuth);
+    Serial.println("#");
+  }
+  if (command=="dneg")
+  {
+    setMotorSpeed(-800);
+  }
+  if (command=="dpos")
+  {
+    setMotorSpeed(800);
+  }
+  if (command=="dstp")
+  {
+    setMotorSpeed(0);
+  }
+  
+}
+
+void azimuthTick()
+{
+
+
+ // If interrupts come faster than 200ms, assume it's a bounce and ignore
+interrupt_time=millis();
+if (interrupt_time - last_interrupt_time > 800) 
+ 
+//  if (getSMCVariable(SPEED) > 0)
+  {
+    Azimuth = Azimuth + 5;
+  }
+//  else
+//  {
+//    Azimuth = Azimuth - 5;
+//  }
+last_interrupt_time = interrupt_time;
+}
+
 void setup(){
+
+  pinMode(interruptPin, INPUT);
+  attachInterrupt(digitalPinToInterrupt(interruptPin), azimuthTick, CHANGE);
 
   // Setup and configure rf radio
 
@@ -100,7 +229,8 @@ void setup(){
   radio.setChannel(77);                   // In US, channel should be betwene 70-80
 
   Serial.begin(115200);
-
+  smcSerial.begin(19200);
+  
   lcd.begin (20,4);
   lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
   lcd.setBacklight(HIGH);
@@ -110,6 +240,28 @@ void setup(){
   lcd.setCursor (0,1); 
   lcd.print("Dome Control");
   lcd.setCursor (0,2); 
+
+  // Reset SMC when Arduino starts up
+  pinMode(resetPin, OUTPUT);
+  digitalWrite(resetPin, LOW);  // reset SMC
+  delay(1);  // wait 1 ms
+  pinMode(resetPin, INPUT);  // let SMC run again
+
+  // must wait at least 1 ms after reset before transmitting
+  delay(1000);
+
+  // this lets us read the state of the SMC ERR pin (optional)
+  // pinMode(errPin, INPUT);
+
+  smcSerial.write(0xAA);  // send baud-indicator byte
+  setMotorLimit(FORWARD_ACCELERATION, 100);
+  setMotorLimit(REVERSE_ACCELERATION, 100);
+  setMotorLimit(FORWARD_DECELERATION, 100);
+  setMotorLimit(REVERSE_DECELERATION, 100);
+  setMotorLimit(DECELERATION, 1);
+  
+  // clear the safe-start violation and let the motor run
+  exitSafeStart();
   
     if (!radio.write( &cmd, 4 ))
     {
@@ -136,26 +288,18 @@ void loop(void)
   {
     Serial.readBytesUntil('#', cmd, 5);
     strCmd = (char*)cmd;
-    if (strCmd == "info")
-    {
-      Serial.println("status#");
-//      for (int i=0; i<=1; i++)
-//      {
-//        Serial.print(statusBytes[i]);
-//        Serial.print(',');  
-//      }
-//      Serial.print(statusBytes[2]);
-//      Serial.print('#');
-      lcd.clear();
-      lcd.print("Got tick");
-    }
-    else if (strCmd.startsWith("s"))
+    if (strCmd.startsWith("s"))
     {
       sendShutter(cmd);        //TODO : Write this function.
+      if (strCmd == "snfo")
+      {
+        Serial.print(statusBytes[0]);
+        Serial.println("#");
+      }
     }
     else
     {
-        //stuff that involves getting info or rotating the dome.
+        sendDome(strCmd);
     }
   }
 } // End loop()

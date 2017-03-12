@@ -13,8 +13,26 @@
  *************************************************************************/
 
 #include <SPI.h>
+#include <LCD.h>
+#include <LiquidCrystal_I2C.h>
 #include <SoftwareSerial.h>
 #include "RF24.h"
+
+// LCD Pin assignments
+#define I2C_ADDR    0x27 
+#define BACKLIGHT_PIN     3
+#define BACKLIGHT_BRIGHTNESS    9
+#define En_pin  2
+#define Rw_pin  1
+#define Rs_pin  0
+#define D4_pin  4
+#define D5_pin  5
+#define D6_pin  6
+#define D7_pin  7
+
+// Create instance of LCD
+LiquidCrystal_I2C  lcd(I2C_ADDR,En_pin,Rw_pin,Rs_pin,D4_pin,D5_pin,D6_pin,D7_pin);
+
 
 // Hardware configuration: nRF24L01 radio on SPI bus plus pins 7 & 8 
 RF24 radio(7,8);
@@ -141,10 +159,11 @@ void stuffStatus()
   bitWrite(statusPayload[0], 0, bitRead(limitStatus,8));                  // LIMIT_STATUS Bit 8 is AN2 (Open side) limit switch active
   bitWrite(statusPayload[0], 1, bitRead(limitStatus,7));                  // LIMIT_STATUS Bit 7 is AN1 (Closed side) limit switch active
   bitWrite(statusPayload[0], 2, motorSpeed < 0);                          // Negative motor speed is actively moving, opening the shutter
-  bitWrite(statusPayload[0], 3, motorSpeed > 0);                          // Negative motor speed is actively moving, opening the shutter  
+  bitWrite(statusPayload[0], 3, motorSpeed > 0);                          // Positive motor speed is actively moving, Closing the shutter  
   bitWrite(statusPayload[0], 4, errorStatus > 0);                         // If ERROR_STATUS > 0, some error has occurred.
   bitWrite(statusPayload[0], 5, (limitStatus == 0 && motorSpeed == 0));   // If no limit switch is active, and speed is 0, shutter is stopped between limits
-
+  //bitWrite(statusPayload[0], 6, (limitStatus > 0 && motorSpeed != 0));    // If either limit switch is active, and motor is moving, we have an issue
+  
   // Stuff status byte 1
   bitWrite(statusPayload[1], 0, bitRead(errorStatus, 0));                  // Reference : https://www.pololu.com/docs/0J44/6.4
   bitWrite(statusPayload[1], 1, bitRead(errorStatus, 2));
@@ -155,74 +174,112 @@ void stuffStatus()
   bitWrite(statusPayload[1], 6, bitRead(errorStatus, 8));
   bitWrite(statusPayload[1], 7, bitRead(errorStatus, 9));
 
-  // Byte 2 is rounded temp from SMC
-  int temp = round(float(getSMCVariable(TEMPERATURE)) / 10);
-  statusPayload[2] = temp;
-
-////  radio.flush_rx();
-//  radio.writeAckPayload(1,statusPayload, 3 );
-
-  // DEBUG
-  // Serial.println("statusPayload stuffed");
+  // Byte 2 is rounded temp from SMC - Don't think we need to return this, so returning 0 for now
+    statusPayload[2] = 0;
+//  int temp = round(float(getSMCVariable(TEMPERATURE)) / 10);
+//  statusPayload[2] = temp;
 
 }
 
+void updateLCD()
+{
+      lcd.clear();
+      lcd.print("T: ");
+      lcd.print(float(float(getSMCVariable(TEMPERATURE)) / 10),1);
+      lcd.print("C  ");
+      lcd.print("VIn: ");
+      lcd.print(float(float(getSMCVariable(INPUT_VOLTAGE)) / 1000),1);
+      lcd.print("v");        
+      lcd.setCursor(0,1);      
+//      lcd.print("E: 0x");
+//      lcd.print(getSMCVariable(ERROR_STATUS), BIN);
+//      lcd.setCursor(0,1);      
+      lcd.print("Shutter: ");
+      if (getSMCVariable(LIMIT_STATUS) == 0)
+        {
+          if (getSMCVariable(SPEED) > 0)
+          {
+            lcd.print("Closing");
+          }
+          else
+          {
+            lcd.print("Opening");
+          }
+        }
+        else
+        {
+          if (bitRead(getSMCVariable(LIMIT_STATUS),7))
+          {
+            lcd.print("Closed");
+          }
+          else
+          {
+            lcd.print("Open");
+          }
+        }
+//      lcd.print(getSMCVariable(LIMIT_STATUS),BIN);
+//      Serial.print("Motor Speed = ");
+//      Serial.println(getSMCVariable(SPEED),DEC);
+//      Serial.println();
+      lcd.setCursor(0,2);
+      lcd.print("S: ");
+//      Serial.print("statusPayload[0] = ");
+      lcd.print(statusPayload[0],DEC);
+      lcd.print("-");
+//      Serial.println(statusPayload[0],BIN);
+//      Serial.print("statusPayload[1] = ");
+      lcd.print(statusPayload[1],DEC);
+      lcd.print("-");
+//      Serial.println(statusPayload[1],BIN);
+//      Serial.print("statusPayload[2] = ");
+      lcd.print(statusPayload[2],DEC);
+//      Serial.print(" - ");
+//      Serial.println(statusPayload[2],BIN);
+//      Serial.println();
+
+}
 void doCommand(String command)
 {
   if (command=="shcl")  
    {
      setMotorSpeed(800);
+     updateLCD();
    }
   else if (command=="shop")  
    {
      setMotorSpeed(-800);
+     updateLCD();
    }
   else if (command=="xxxx")  
    {
      setMotorSpeed(0);
+     updateLCD();
    }
   if (command=="rset")
     {
         exitSafeStart();
+        updateLCD();
     }
   else if (command=="snfo")
     {
-      Serial.print("Controller Temp : ");
-      Serial.print(float(float(getSMCVariable(TEMPERATURE)) / 10),1);
-      Serial.print(char(186));
-      Serial.println("C");
-      Serial.print("Error Status: 0x");
-      Serial.println(getSMCVariable(ERROR_STATUS), BIN);
-      Serial.print("VIN = ");
-      Serial.print(float(float(getSMCVariable(INPUT_VOLTAGE)) / 1000));
-      Serial.println(" V");        
-      Serial.print("Limit Status = ");
-      Serial.print(getSMCVariable(LIMIT_STATUS),DEC);
-      Serial.print(" - ");
-      Serial.println(getSMCVariable(LIMIT_STATUS),BIN);
-      Serial.print("Motor Speed = ");
-      Serial.println(getSMCVariable(SPEED),DEC);
-      Serial.println();
-      Serial.print("statusPayload[0] = ");
-      Serial.print(statusPayload[0],DEC);
-      Serial.print(" - ");
-      Serial.println(statusPayload[0],BIN);
-      Serial.print("statusPayload[1] = ");
-      Serial.print(statusPayload[1],DEC);
-      Serial.print(" - ");
-      Serial.println(statusPayload[1],BIN);
-      Serial.print("statusPayload[2] = ");
-      Serial.print(statusPayload[2],DEC);
-      Serial.print(" - ");
-      Serial.println(statusPayload[2],BIN);
-      Serial.println();
+      updateLCD();
     }
 }
 void setup(){
 
-  Serial.begin(115200);
-  Serial.println(F("TriStar Observatory : Shutter Secondary Controller"));
+//  Serial.begin(115200);
+//  Serial.println(F("TriStar Observatory : Shutter Secondary Controller"));
   smcSerial.begin(19200);
+
+  lcd.begin (20,4);
+  lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
+  lcd.setBacklight(HIGH);
+  analogWrite(BACKLIGHT_BRIGHTNESS,128);
+  lcd.clear();
+  lcd.print("TriStar Observatory");
+  lcd.setCursor (0,1); 
+  lcd.print("Shutter Control");
+  lcd.setCursor (0,2); 
 
   // Reset SMC when Arduino starts up
   pinMode(resetPin, OUTPUT);
@@ -231,7 +288,7 @@ void setup(){
   pinMode(resetPin, INPUT);  // let SMC run again
 
   // must wait at least 1 ms after reset before transmitting
-  delay(5);
+  delay(1000);
 
   // this lets us read the state of the SMC ERR pin (optional)
   // pinMode(errPin, INPUT);
@@ -248,7 +305,8 @@ void setup(){
 
   // Do our first stuffStatus
   stuffStatus();
-  lastMillis = millis();             // We'll compare this in loop(), and poll status every 5s
+  lastMillis = millis();             // We'll compare this in loop(), and poll status every 1s
+  doCommand("snfo");
   
   // Setup and configure rf radio
 
@@ -281,6 +339,7 @@ void loop(void)
   if (currentMillis - lastMillis > 1000)
   {
     stuffStatus();
+    //doCommand("snfo");
     lastMillis = currentMillis;
     radio.flush_tx();
     radio.writeAckPayload(1,statusPayload, 3 );
@@ -291,8 +350,10 @@ void loop(void)
     radio.read( &cmd, 4 );
     String theCommand = (char*)cmd;
     theCommand.remove(4);
-    Serial.print("Received command : ");
-    Serial.println(theCommand);
+//    lcd.clear();
+//    lcd.print("Received command : ");
+//    lcd.setCursor(0,1);
+//    lcd.print(theCommand);
     doCommand(theCommand);
   }   //end while
 }   //end loop
