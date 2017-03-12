@@ -1,14 +1,12 @@
 /*************************************************************************
  * TriStar Observatory Shutter Slave
- * 2017FEB13
- * v0.1
+ * 2017MAR12
+ * v0.2.5
  * 
  * The shutter slave will handle all shutter control functions, and report  
  * shutter information to the dome master to relay to ASCOM.
  * 
  * Parts derived from maniacbug's RF24 library pingpair_ack example
- * 
- * 
  * 
  *************************************************************************/
 
@@ -30,13 +28,11 @@
 #define D6_pin  6
 #define D7_pin  7
 
-// Create instance of LCD
+// Instance of LCD
 LiquidCrystal_I2C  lcd(I2C_ADDR,En_pin,Rw_pin,Rs_pin,D4_pin,D5_pin,D6_pin,D7_pin);
-
 
 // Hardware configuration: nRF24L01 radio on SPI bus plus pins 7 & 8 
 RF24 radio(7,8);
-
 
 // Pololu SMC config
 const int rxPin = 3;          // pin 3 connects to SMC TX
@@ -50,7 +46,7 @@ SoftwareSerial smcSerial = SoftwareSerial(rxPin, txPin);
 // SMC Variable IDs
 #define ERROR_STATUS 0
 #define LIMIT_STATUS 3
-#define TARGET_SPEED 20
+//  #define TARGET_SPEED 20
 #define SPEED 21
 #define INPUT_VOLTAGE 23
 #define TEMPERATURE 24
@@ -71,7 +67,7 @@ byte cmd[4];
 unsigned long lastMillis=0;
 unsigned long currentMillis=0;
 
-// read an SMC serial byte
+// readSMCByte : Read an SMC serial byte
 int readSMCByte()
 {
   char c;
@@ -79,6 +75,7 @@ int readSMCByte()
   return (byte)c;
 }
 
+// exitSafeStart : Exits controller Safe Start mode
 // required to allow motor to move
 // must be called when controller restarts and after any error
 void exitSafeStart()
@@ -86,8 +83,7 @@ void exitSafeStart()
   smcSerial.write(0x83);
 }
 
-// speed should be a number from -3200 to 3200
-// TODO : I'll be using a set speed, so this can probbaly go away to save mem.
+// setMotorspeed : Move the motor
 void setMotorSpeed(int speed)
 {
   if (speed < 0)
@@ -103,6 +99,7 @@ void setMotorSpeed(int speed)
   smcSerial.write(speed >> 5);
 }
 
+// setMotorLimit : Function to set motor limits
 unsigned char setMotorLimit(unsigned char  limitID, unsigned int limitValue)
 {
   smcSerial.write(0xA2);
@@ -112,9 +109,7 @@ unsigned char setMotorLimit(unsigned char  limitID, unsigned int limitValue)
   return readSMCByte();
 }
 
-// returns the specified variable as an unsigned integer.
-// if the requested variable is signed, the value returned by this function
-// should be typecast as an int.
+// getSMCVariable : returns the specified variable as an unsigned integer.
 int getSMCVariable(unsigned char variableID)
 {
   smcSerial.write(0xA1);
@@ -174,13 +169,14 @@ void stuffStatus()
   bitWrite(statusPayload[1], 6, bitRead(errorStatus, 8));
   bitWrite(statusPayload[1], 7, bitRead(errorStatus, 9));
 
-  // Byte 2 is rounded temp from SMC - Don't think we need to return this, so returning 0 for now
-    statusPayload[2] = 0;
+// Byte 2 is rounded temp from SMC - Don't think we need to return this, so returning 0 for now
+//  statusPayload[2] = 0;
 //  int temp = round(float(getSMCVariable(TEMPERATURE)) / 10);
 //  statusPayload[2] = temp;
 
 }
 
+// Draw status on LCD
 void updateLCD()
 {
       lcd.clear();
@@ -191,9 +187,6 @@ void updateLCD()
       lcd.print(float(float(getSMCVariable(INPUT_VOLTAGE)) / 1000),1);
       lcd.print("v");        
       lcd.setCursor(0,1);      
-//      lcd.print("E: 0x");
-//      lcd.print(getSMCVariable(ERROR_STATUS), BIN);
-//      lcd.setCursor(0,1);      
       lcd.print("Shutter: ");
       if (getSMCVariable(LIMIT_STATUS) == 0)
         {
@@ -217,60 +210,50 @@ void updateLCD()
             lcd.print("Open");
           }
         }
-//      lcd.print(getSMCVariable(LIMIT_STATUS),BIN);
-//      Serial.print("Motor Speed = ");
-//      Serial.println(getSMCVariable(SPEED),DEC);
-//      Serial.println();
       lcd.setCursor(0,2);
-      lcd.print("S: ");
-//      Serial.print("statusPayload[0] = ");
-      lcd.print(statusPayload[0],DEC);
-      lcd.print("-");
-//      Serial.println(statusPayload[0],BIN);
-//      Serial.print("statusPayload[1] = ");
-      lcd.print(statusPayload[1],DEC);
-      lcd.print("-");
-//      Serial.println(statusPayload[1],BIN);
-//      Serial.print("statusPayload[2] = ");
+      lcd.print("Error: ");
+//      lcd.print(statusPayload[0],DEC);
+//      lcd.print("-");
+//      lcd.print(statusPayload[1],DEC);
+//      lcd.print("-");
       lcd.print(statusPayload[2],DEC);
-//      Serial.print(" - ");
-//      Serial.println(statusPayload[2],BIN);
-//      Serial.println();
 
 }
+
+//  doCommand function for handling shutter commands
 void doCommand(String command)
 {
-  if (command=="shcl")  
+  if (command=="shcl")              // Close shutter  
    {
      setMotorSpeed(800);
      updateLCD();
    }
-  else if (command=="shop")  
+  else if (command=="shop")         // Open shutter
    {
      setMotorSpeed(-800);
      updateLCD();
    }
-  else if (command=="xxxx")  
+  else if (command=="xxxx")         // halt shutter immediately
    {
      setMotorSpeed(0);
      updateLCD();
    }
-  if (command=="rset")
+  else if (command=="rset")              // Reset shutter
     {
         exitSafeStart();
         updateLCD();
     }
-  else if (command=="snfo")
+  else if (command=="snfo")         // Get shutter info
     {
       updateLCD();
     }
 }
 void setup(){
 
-//  Serial.begin(115200);
-//  Serial.println(F("TriStar Observatory : Shutter Secondary Controller"));
+  // Begin serial to controller
   smcSerial.begin(19200);
 
+  // Set up LCD
   lcd.begin (20,4);
   lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
   lcd.setBacklight(HIGH);
@@ -288,11 +271,9 @@ void setup(){
   pinMode(resetPin, INPUT);  // let SMC run again
 
   // must wait at least 1 ms after reset before transmitting
-  delay(1000);
+  delay(10);
 
-  // this lets us read the state of the SMC ERR pin (optional)
-  // pinMode(errPin, INPUT);
-
+  // Set up motor controller.  
   smcSerial.write(0xAA);  // send baud-indicator byte
   setMotorLimit(FORWARD_ACCELERATION, 100);
   setMotorLimit(REVERSE_ACCELERATION, 100);
@@ -305,8 +286,8 @@ void setup(){
 
   // Do our first stuffStatus
   stuffStatus();
-  lastMillis = millis();             // We'll compare this in loop(), and poll status every 1s
-  doCommand("snfo");
+  lastMillis = millis();              // We'll compare this in loop(), and poll status every 1s
+  doCommand("snfo");                  // This will update the LCD for our initial readout
   
   // Setup and configure rf radio
 
@@ -319,41 +300,36 @@ void setup(){
   radio.setDataRate(RF24_1MBPS);          // Works best, for some reason
   radio.setPALevel(RF24_PA_MIN);          // Issues with LOW?
   radio.setChannel(77);                   // In US, channel should be betwene 70-80
-//  radio.printDetails();                 // Dump the configuration of the rf unit 
-                                          // for debugging
   radio.flush_tx();
   radio.writeAckPayload(1,statusPayload, 3 );
 }   //end setup
 
 void loop(void) 
 {
-// SMC Error Status == 1 if only error is Safe Start Violation.  Since
-// all other errors are 0, it is safe to exit Safe Start
 
+  // SMC Error Status == 1 if only error is Safe Start Violation.  Since
+  // all other errors are 0, it is safe to exit Safe Start
   if (getSMCVariable(ERROR_STATUS) == 1) 
   {
     exitSafeStart();
-  }
+  }   // end if
 
+  // Build status payload every second
   currentMillis = millis();
-  if (currentMillis - lastMillis > 1000)
+  if (currentMillis - lastMillis > 500)
   {
     stuffStatus();
-    //doCommand("snfo");
     lastMillis = currentMillis;
     radio.flush_tx();
     radio.writeAckPayload(1,statusPayload, 3 );
-  }
+  }   // end if
 
+  // Check for command and execute it
   while( radio.available())
   {
     radio.read( &cmd, 4 );
     String theCommand = (char*)cmd;
     theCommand.remove(4);
-//    lcd.clear();
-//    lcd.print("Received command : ");
-//    lcd.setCursor(0,1);
-//    lcd.print(theCommand);
     doCommand(theCommand);
   }   //end while
 }   //end loop

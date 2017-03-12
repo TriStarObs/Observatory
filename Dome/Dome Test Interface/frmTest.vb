@@ -24,8 +24,8 @@
         Else
             driver = New ASCOM.DriverAccess.Dome(My.Settings.DriverId)
             driver.Connected = True
-            Timer1.Enabled = True
-            Timer1.Interval = 1000
+            'Timer1.Enabled = True
+            'Timer1.Interval = 1000
         End If
         SetUIState()
     End Sub
@@ -97,14 +97,16 @@
     End Sub
 
     Private Sub btnStatus_Click(sender As Object, e As EventArgs) Handles btnStatus.Click
-        Dim strStatus As String
-        strStatus = driver.Action("GetStatus", "")
-        txtStatus.Text = strStatus
-
+        txtShutter.Text = driver.ShutterStatus.ToString
     End Sub
 
 
     Private Sub Timer1_Tick(sender As Object, e As EventArgs) Handles Timer1.Tick
-        txtStatus.Text = driver.ShutterStatus.ToString
+        txtShutter.Text = driver.ShutterStatus.ToString
+        '        txtAzimuth.Text = driver.Azimuth.ToString
+    End Sub
+
+    Private Sub btnAzimuth_Click(sender As Object, e As EventArgs) Handles btnAzimuth.Click
+        txtAzimuth.Text = driver.Azimuth
     End Sub
 End Class

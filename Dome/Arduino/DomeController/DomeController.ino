@@ -175,18 +175,19 @@ void sendDome(String command)
 //  Serial.println(command);
   if (command=="dazm")
   {
+//    Serial.println("Here I am");
     Serial.print(Azimuth);
     Serial.println("#");
   }
-  if (command=="dneg")
+  else if (command=="dneg")
   {
     setMotorSpeed(-800);
   }
-  if (command=="dpos")
+  else if (command=="dpos")
   {
     setMotorSpeed(800);
   }
-  if (command=="dstp")
+  else if (command=="dstp")
   {
     setMotorSpeed(0);
   }
@@ -195,11 +196,9 @@ void sendDome(String command)
 
 void azimuthTick()
 {
-
-
- // If interrupts come faster than 200ms, assume it's a bounce and ignore
+// If interrupts come faster than 400ms, assume it's a bounce and ignore
 interrupt_time=millis();
-if (interrupt_time - last_interrupt_time > 800) 
+if (interrupt_time - last_interrupt_time > 400) 
  
 //  if (getSMCVariable(SPEED) > 0)
   {
@@ -230,28 +229,15 @@ void setup(){
 
   Serial.begin(115200);
   smcSerial.begin(19200);
-  
-  lcd.begin (20,4);
-  lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
-  lcd.setBacklight(HIGH);
-  analogWrite(BACKLIGHT_BRIGHTNESS,128);
-  lcd.clear();
-  lcd.print("TriStar Observatory");
-  lcd.setCursor (0,1); 
-  lcd.print("Dome Control");
-  lcd.setCursor (0,2); 
 
-  // Reset SMC when Arduino starts up
+    // Reset SMC when Arduino starts up
   pinMode(resetPin, OUTPUT);
   digitalWrite(resetPin, LOW);  // reset SMC
   delay(1);  // wait 1 ms
   pinMode(resetPin, INPUT);  // let SMC run again
 
   // must wait at least 1 ms after reset before transmitting
-  delay(1000);
-
-  // this lets us read the state of the SMC ERR pin (optional)
-  // pinMode(errPin, INPUT);
+  delay(10);
 
   smcSerial.write(0xAA);  // send baud-indicator byte
   setMotorLimit(FORWARD_ACCELERATION, 100);
@@ -263,6 +249,15 @@ void setup(){
   // clear the safe-start violation and let the motor run
   exitSafeStart();
   
+  lcd.begin (20,4);
+  lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
+  lcd.setBacklight(HIGH);
+  analogWrite(BACKLIGHT_BRIGHTNESS,128);
+  lcd.clear();
+  lcd.print("TriStar Observatory");
+  lcd.setCursor (0,1); 
+  lcd.print("Dome Control");
+  lcd.setCursor (0,2); 
     if (!radio.write( &cmd, 4 ))
     {
       lcd.print("No connection to shutter.");
@@ -270,16 +265,16 @@ void setup(){
     else
     {
       lcd.print("Shutter connected.");
-      lcd.setCursor(0,3);
-      radio.read(statusBytes, 3 );
-      lcd.print(statusBytes[0]);
-      lcd.print(" - ");
-      lcd.print(statusBytes[1]);
-      lcd.print(" - ");
-      lcd.print(statusBytes[2]);
-      delay(3000);
+//      lcd.setCursor(0,3);
+//      radio.read(statusBytes, 3 );
+//      lcd.print(statusBytes[0]);
+//      lcd.print(" - ");
+//      lcd.print(statusBytes[1]);
+//      lcd.print(" - ");
+//      lcd.print(statusBytes[2]);
+//      delay(3000);
     }
-  lcd.clear();
+//  lcd.clear();
 } // end setup()
 
 void loop(void) 
@@ -290,7 +285,7 @@ void loop(void)
     strCmd = (char*)cmd;
     if (strCmd.startsWith("s"))
     {
-      sendShutter(cmd);        //TODO : Write this function.
+      sendShutter(cmd);        
       if (strCmd == "snfo")
       {
         Serial.print(statusBytes[0]);
@@ -301,6 +296,14 @@ void loop(void)
     {
         sendDome(strCmd);
     }
+    lcd.clear();
+    lcd.print("Rcv Cmd : ");
+    lcd.print(strCmd);
+//    delay(100);       // No idea why this is necessary, but it is.
+//    while (Serial.available() > 0)
+//    {
+//      Serial.read();
+//    }   //end while()
   }
 } // End loop()
 

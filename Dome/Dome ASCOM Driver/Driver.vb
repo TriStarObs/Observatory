@@ -32,6 +32,8 @@ Imports System.Collections.Generic
 Imports System.Globalization
 Imports System.Runtime.InteropServices
 Imports System.Text
+Imports System.Threading
+
 
 <Guid("fad9f7cd-358c-4519-9e2f-ec9275a2750d")> _
 <ClassInterface(ClassInterfaceType.None)> _
@@ -61,8 +63,10 @@ Public Class Dome
     Private astroUtilities As AstroUtils ' Private variable to hold an AstroUtils object to provide the Range method
     Private TL As TraceLogger ' Private variable to hold the trace logger object (creates a diagnostic log file with information that you specify)
     Private objSerial As ASCOM.Utilities.Serial
+    Private Mutex As System.Threading.Mutex
 
-    Dim WithEvents Timer1 As New System.Timers.Timer
+
+    '    Dim WithEvents Timer1 As New System.Timers.Timer
 
     '
     ' Constructor - Must be public for COM registration!
@@ -162,6 +166,8 @@ Public Class Dome
     Public Function CommandString(ByVal Command As String, Optional ByVal Raw As Boolean = False) As String _
         Implements IDomeV2.CommandString
         ' TODO : something to ensure that only one command is in progress at a time
+        Mutex = New Mutex
+        Mutex.WaitOne()
         Try
             Dim response As String
             CheckConnected("CommandString")
@@ -172,6 +178,8 @@ Public Class Dome
         Catch ex As Exception
             Return "255"
             ' Throw New ApplicationException("CommandString failed.", ex)
+        Finally
+            Mutex.ReleaseMutex()
         End Try
     End Function
 
@@ -197,7 +205,8 @@ Public Class Dome
             Else
                 connectedState = False
                 TL.LogMessage("Connected Set", "Disconnecting from port " + comPort)
-
+                objSerial.Connected = False
+                objSerial = Nothing
             End If
         End Set
     End Property
@@ -292,6 +301,8 @@ Public Class Dome
 
     Public ReadOnly Property Azimuth() As Double Implements IDomeV2.Azimuth
         Get
+            'TL.LogMessage("azimuth", "Not implemented")
+            'Throw New ASCOM.PropertyNotImplementedException("Azimuth", False)
             dblAzimuth = CDbl(CommandString("dazm#", True))
             TL.LogMessage("Azimuth", dblAzimuth.ToString)
             Return dblAzimuth
@@ -325,8 +336,8 @@ Public Class Dome
     Public ReadOnly Property CanSetAzimuth() As Boolean Implements IDomeV2.CanSetAzimuth
         Get
             ' TODO : Implement
-            TL.LogMessage("CanSetAzimuth Get", False.ToString())
-            Return False
+            TL.LogMessage("CanSetAzimuth Get", True.ToString())
+            Return True
         End Get
     End Property
 
@@ -395,24 +406,25 @@ Public Class Dome
 
             Dim intShutterStatus As Integer = CInt(CommandString("snfo#"))
             If intShutterStatus = 255 Then
+                TL.LogMessage("ShutterStatus", ShutterState.shutterError.ToString())
                 Return ShutterState.shutterError
             Else
                 Dim strBinary As String = Convert.ToString(intShutterStatus, 2).PadLeft(8, "0"c)
                 strBinary = StrReverse(strBinary)
                 If GetBit(strBinary, 4) Or GetBit(strBinary, 5) Then
-                    TL.LogMessage("shutterstatus", ShutterState.shutterError.ToString())
+                    TL.LogMessage("ShutterStatus", ShutterState.shutterError.ToString())
                     Return ShutterState.shutterError
                 ElseIf GetBit(strBinary, 0) Then
-                    TL.LogMessage("shutterstatus", ShutterState.shutterOpen.ToString())
+                    TL.LogMessage("ShutterStatus", ShutterState.shutterOpen.ToString())
                     Return ShutterState.shutterOpen
                 ElseIf GetBit(strBinary, 1) Then
-                    TL.LogMessage("shutterstatus", ShutterState.shutterClosed.ToString())
+                    TL.LogMessage("ShutterStatus", ShutterState.shutterClosed.ToString())
                     Return ShutterState.shutterClosed
                 ElseIf GetBit(strBinary, 2) Then
-                    TL.LogMessage("shutterstatus", ShutterState.shutterOpening.ToString())
+                    TL.LogMessage("ShutterStatus", ShutterState.shutterOpening.ToString())
                     Return ShutterState.shutterOpening
                 ElseIf GetBit(strBinary, 3) Then
-                    TL.LogMessage("shutterstatus", ShutterState.shutterClosing.ToString())
+                    TL.LogMessage("ShutterStatus", ShutterState.shutterClosing.ToString())
                     Return ShutterState.shutterClosing
                 End If
             End If
