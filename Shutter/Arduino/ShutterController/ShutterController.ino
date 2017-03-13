@@ -138,7 +138,6 @@ int getSMCVariable(unsigned char variableID)
     6   Motor Driver Error
     7   ERR Line High (With no other error)
   2 : Controller temperature
-
 **********************************************************************/
 
 void stuffStatus()

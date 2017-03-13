@@ -24,7 +24,7 @@
 #define I2C_ADDR    0x27 
 #define BACKLIGHT_PIN     3
 #define BACKLIGHT_BRIGHTNESS    9
-#define En_pin  2
+#define En_pin  10
 #define Rw_pin  1
 #define Rs_pin  0
 #define D4_pin  4
@@ -33,7 +33,7 @@
 #define D7_pin  7
 
 // Interrupt for azimuth encoder
-const byte interruptPin = 3;
+const byte interruptPin = 2;
 static unsigned long last_interrupt_time = 0;
 unsigned long interrupt_time;
 
@@ -41,7 +41,7 @@ unsigned long interrupt_time;
 LiquidCrystal_I2C  lcd(I2C_ADDR,En_pin,Rw_pin,Rs_pin,D4_pin,D5_pin,D6_pin,D7_pin);
 
 // Pololu SMC config
-const int rxPin = 10;          // pin 10 connects to SMC TX
+const int rxPin = 3;          // pin 10 connects to SMC TX
 const int txPin = 4;          // pin 4 connects to SMC RX
 const int resetPin = 5;       // pin 5 connects to SMC nRST
 const int errPin = 6;         // pin 6 connects to SMC ERR
@@ -189,7 +189,7 @@ void sendDome(String command)
     slewDest = command.substring(1).toFloat();
     if (Azimuth != slewDest)
     {
-      slewToAzimuth();
+      slewToAzimuth(slewDest);
     }
     
   }
@@ -208,20 +208,10 @@ void azimuthTick()
 {
 // If interrupts come faster than 400ms, assume it's a bounce and ignore
 interrupt_time=millis();
-if (interrupt_time - last_interrupt_time > 400) 
- 
-//  if (getSMCVariable(SPEED) > 0)
+if (interrupt_time - last_interrupt_time > 500) 
   {
     Azimuth = Azimuth + 5.0;
-    if (Azimuth >=360.0)
-    {
-      Azimuth = 0.0 + (Azimuth - 360.0);
-    }
   }
-//  else
-//  {
-//    Azimuth = Azimuth - 5;
-//  }
 last_interrupt_time = interrupt_time;
 }
 
@@ -279,14 +269,6 @@ void setup(){
     else
     {
       lcd.print("Shutter connected.");
-//      lcd.setCursor(0,3);
-//      radio.read(statusBytes, 3 );
-//      lcd.print(statusBytes[0]);
-//      lcd.print(" - ");
-//      lcd.print(statusBytes[1]);
-//      lcd.print(" - ");
-//      lcd.print(statusBytes[2]);
-//      delay(3000);
     }
 //  lcd.clear();
 } // end setup()
@@ -296,7 +278,7 @@ void loop(void)
   if (getSMCVariable(SPEED) != 0)
   {
     // Dome is turning, handle this first
-    if (Azimuth = slewDest)       // This may need to be changed, depending on timing.
+    if (Azimuth == slewDest)       // This may need to be changed, depending on timing.
     {
       setMotorSpeed(0);
     }
@@ -318,14 +300,6 @@ void loop(void)
     {
         sendDome(strCmd);
     }
-//    lcd.clear();
-//    lcd.print("Rcv Cmd : ");
-//    lcd.print(strCmd);
-//    delay(100);       // No idea why this is necessary, but it is.
-//    while (Serial.available() > 0)
-//    {
-//      Serial.read();
-//    }   //end while()
   }
 } // End loop()
 
