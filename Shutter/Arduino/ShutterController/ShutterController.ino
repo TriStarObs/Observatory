@@ -51,8 +51,7 @@ int shutterStatus=0;
 
 // Variables for RF24 data
 byte statusPayload[6];
-byte pipeNum;
-byte cmd[4];
+byte cmd[5];
 
 // Timer variables for stuffStatus() call
 unsigned long lastMillis = 0;
@@ -111,24 +110,23 @@ void setup() {
   // clear the safe-start violation and let the motor run
   exitSafeStart();
 
-  // Do our first stuffStatus
-  stuffStatus();
-  lastMillis = millis();              // We'll compare this in loop(), and poll status every 1s
-  doCommand("snfo");                  // This will update the LCD for our initial readout
-
   // Setup and configure rf radio
 
   radio.begin();
   radio.setAutoAck(true);
   radio.enableAckPayload();               // Allow optional ack payloads
-  radio.setRetries(0, 15);                // Min time between retries, max # of retries
+  radio.setRetries(2, 15);                // Min time between retries, max # of retries
   radio.openReadingPipe(1, 0xABCDABCD71LL); // No need for a writing pipe for Ack payloads
   radio.startListening();                 // Start listening
   radio.setDataRate(RF24_1MBPS);          // Works best, for some reason
   radio.setPALevel(RF24_PA_MIN);          // Issues with LOW?
   radio.setChannel(77);                   // In US, channel should be betwene 70-80
-  radio.flush_tx();
-  radio.writeAckPayload(1, statusPayload, 3 );
+
+  // Do our first stuffStatus
+  stuffStatus();
+  lastMillis = millis();              // We'll compare this in loop(), and poll status every 1s
+  doCommand("snfo");                  // This will update the LCD for our initial readout
+  
 }   //end setup
 
 void loop(void)
@@ -143,25 +141,23 @@ void loop(void)
 
   // Build status payload
   stuffStatus();
-  radio.flush_tx();
-  radio.writeAckPayload(1, statusPayload, 3 );
     
-  // Print debug info every 3s
-  currentMillis = millis();
-  if (currentMillis - lastMillis > 3000)
-  {
-    printDebug();
-    lastMillis = currentMillis;
-  }   // end if
+//  // Print debug info every 3s
+//  currentMillis = millis();
+//  if (currentMillis - lastMillis > 3000)
+//  {
+//    printDebug();
+//    lastMillis = currentMillis;
+//  }   // end if
 
   // Check for command and execute it
-  while ( radio.available())
+  if ( radio.available())
   {
     radio.read( &cmd, 4 );
     String theCommand = (char*)cmd;
-    Serial.println("DEBUG : Read something");
-    theCommand.remove(4);
+//    theCommand.remove(4);
     doCommand(theCommand);
+//    printDebug();
   }   //end while
 }   //end loop
 
@@ -221,15 +217,7 @@ int getSMCVariable(unsigned char variableID)
 
 // Stuff status bytes into RF24 Ack Payload byte array named statusPayload
 /**********************************************************************
-  0 : Binary status indicators according to the following table
-    0   Shutter is Open
-    1   Shutter is Closed
-    2   Shutter is Opening
-    3   Shutter is Closing
-    4   Shutter Error (Any error.  Details in next byte)
-    5   Shutter is stopped (Neither open nor closed)
-    6   Reserved
-    7   Reserved
+  0 : Binary limit status indicators according to the table below
   1 : Error byte.  Pulled from SMC Error Status, with some bits dropped
     0   Safe Start Violation
     1   Serial Error (Requires Exit from Safe Start AND valid speed command)
@@ -335,6 +323,8 @@ void stuffStatus()
     }
   }
   statusPayload[5] = shutterStatus;
+  radio.flush_tx();
+  radio.writeAckPayload(1, statusPayload, sizeof(statusPayload) );
 } // end stuffStatus()
 
 // print status and other info to serial monitor for debugging
@@ -377,7 +367,7 @@ void printDebug()
       
   }
   Serial.println("-------------------------");
-} // end updateLCD()
+} // end printDebug()
 
 //  doCommand function for handling shutter commands
 void doCommand(String command)

@@ -120,12 +120,12 @@ boolean sendShutter(byte (&cmdArray)[5])
       lcd.clear();
       while(radio.available() )
       {
-        radio.read(statusBytes, 3 );
-        lcd.print(statusBytes[0]);
-        lcd.print(" - ");
-        lcd.print(statusBytes[1]);
-        lcd.print(" - ");
-        lcd.print(statusBytes[2]);
+        radio.read(statusBytes, 6 );
+//        lcd.print(statusBytes[0]);
+//        lcd.print(" - ");
+//        lcd.print(statusBytes[1]);
+//        lcd.print(" - ");
+//        lcd.print(statusBytes[2]);
       }
     }
     return true;
@@ -145,8 +145,7 @@ void setup(){
 
   radio.begin();
   radio.enableAckPayload();               // Allow ack payloads
-  radio.setRetries(0,15);                 // Min time between retries, max # of retries
-  radio.setPayloadSize(4);                // 4 byte commands
+  radio.setRetries(2,15);                 // Min time between retries, max # of retries
   radio.openWritingPipe(0xABCDABCD71LL);  // No need for a reading pipe for Ack payloads
   radio.setDataRate(RF24_1MBPS);          // Works best, for some reason
   radio.setPALevel(RF24_PA_MIN);          // Problems with LOW?
@@ -188,6 +187,11 @@ void setup(){
   lcd.print("Shutter connected.");
   delay(3000);
   lcd.clear();
+      for(int i = 0; i < sizeof(cmd); i++)
+      {
+        Serial.println(cmd[i]);
+      }
+
 } // end setup()
 
 void loop(void) 
@@ -202,15 +206,22 @@ void loop(void)
   }
   while (Serial.available() > 0)
   {
-    Serial.readBytesUntil('#', cmd, 5);
+    Serial.readBytesUntil('#', cmd, sizeof(cmd));
+//    for(int i = 0; i < sizeof(cmd); i++)
+//      {
+//        Serial.println(cmd[i]);
+//      }
     strCmd = (char*)cmd;
     if (strCmd.startsWith("s"))
     {
       sendShutter(cmd);        
       if (strCmd == "snfo")
       {
-        Serial.print(statusBytes[0]);
-        Serial.println("#");
+        for (int i=0; i < sizeof(statusBytes); i++)
+        {
+          Serial.print(statusBytes[i]);
+          Serial.println("#");
+        }
       }
     }
     else
