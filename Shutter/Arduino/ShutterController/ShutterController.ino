@@ -86,8 +86,8 @@ void setup() {
   compass.begin();       // Include true for troubleshooting/debugging info
   
 // Debug
-  Serial.println("TriStar Observatory");
-  Serial.println("Shutter Control");
+//  Serial.println("TriStar Observatory");
+//  Serial.println("Shutter Control");
 
 
   // Reset SMC when Arduino starts up
@@ -372,29 +372,30 @@ void printDebug()
 //  doCommand function for handling shutter commands
 void doCommand(String command)
 {
-  if (command == "shcl")            // Close shutter
+  
+  if (command == "clos")            // Close shutter
   {
     setMotorSpeed(800);
-    printDebug();
+//    printDebug();
   }
-  else if (command == "shop")       // Open shutter
+  else if (command == "open")       // Open shutter
   {
     setMotorSpeed(-800);
-    printDebug();
+//    printDebug();
   }
   else if (command == "xxxx")       // halt shutter immediately
   {
     setMotorSpeed(0);
-    printDebug();
+//    printDebug();
   }
   else if (command == "rset")            // Reset shutter
   {
     exitSafeStart();
-    printDebug();
+//    printDebug();
   }
   else if (command == "snfo")       // Get shutter info
   {
-    printDebug();
+//    printDebug();
   }
 } //end doCommand()
 

@@ -66,13 +66,21 @@ byte azIndicator=0;
 byte shStatus=0;
 
 // Local variables
-int Azimuth = 0;
-int slewDest = 0;
-String slewDir = "CW";                    // Yes, this could be an enum or boolean or any number of more "elegant" things...but this is way easier to understand. :)
+int currentAzimuth = 0;
+int toAzimuth = 0;
+int toAzmithNormalized = 0;
+int currentAzimuthNormalized = 0;
+int travelDistance = 0;
+int travelDistanceNormalized = 0;
+
 bool Slewing = 0;
+
 unsigned long lastMillis = 0;
 unsigned long currentMillis = 0;
+
 String strCmd;
+String shArray[] = {"Open", "Closed", "Opening", "Closing", "Error"};
+
 byte cmd[5];                              // Hold the command we're sending to the shutter
                                           // c - Close shutter
                                           // o - Open shutter
@@ -105,6 +113,7 @@ boolean sendShutter(byte (&cmdArray)[5])
 {
   if (!radio.write( &cmdArray, sizeof(cmdArray) ))
   {
+    lcd.clear();
     lcd.print("Sending of shutter");
     lcd.setCursor(0,1);
     lcd.print("command failed.");
@@ -193,38 +202,23 @@ void setup(){
   lastMillis=currentMillis;
   if (azIndicator == 0)
   {
-    Azimuth = 180 - azOffset;
+    currentAzimuth = 180 - azOffset;
   }
   else
   {
-    Azimuth = 180 + azOffset;
+    currentAzimuth = 180 + azOffset;
   }
   delay(3000);
   lcd.clear();
   lcd.print("Az : ");
-  lcd.print(Azimuth);
+  lcd.print(currentAzimuth);
 } // end setup()
 
 void loop(void) 
 {
   if (Slewing)
   {
-    if ((slewDir == "CW" && Azimuth >= slewDest) || (slewDir == "CCW" && Azimuth <= slewDest))
-    {
-      Slewing=0;
-      setMotorSpeed(0);
-    }
-    else if (abs(Azimuth - slewDest) < 10)
-    {
-     if (slewDir == "CW")
-     {   
-        setMotorSpeed(-400);
-     }
-     else
-     {
-        setMotorSpeed(400);
-     }
-    }
+    checkSlew();
   }
 
   currentMillis=millis();
@@ -242,14 +236,35 @@ void loop(void)
     lastMillis=currentMillis;
     if (azIndicator == 0)
     {
-      Azimuth = 180 - azOffset;
+      currentAzimuth = 180 - azOffset;
     }
     else
     {
-      Azimuth = 180 + azOffset;
+      currentAzimuth = 180 + azOffset;
     }
-    lcd.print("Az : ");
-    lcd.print(Azimuth);
+
+//                          * AtHome
+//                          * AtPark
+//                          * Azimuth
+//                          * ShutterStatus
+//                          * Slewing
+                          
+    lcd.print("Az: ");
+    lcd.print(currentAzimuth);
+    lcd.setCursor(16 - shArray[shStatus].length(), 0);
+    lcd.print("Sh: ");
+    lcd.print(shArray[shStatus]);
+    lcd.setCursor(0,1);
+    lcd.print("Dome: ");
+    if (Slewing)
+    {
+      lcd.print("Slewing to ");
+      lcd.print(toAzimuth);
+    }
+    else
+    {
+      lcd.print("Stationary");
+    }
   }
   
   while (Serial.available() > 0)
@@ -274,10 +289,10 @@ void loop(void)
 *******************************************************/
     if (strCmd.startsWith("s"))
     {
-      slewDest = strCmd.substring(1).toFloat();
-      if (slewDest > 0 && slewDest < 360 && slewDest != Azimuth)
+      toAzimuth = strCmd.substring(1).toFloat();
+      if (toAzimuth >= 0 && toAzimuth < 360 && toAzimuth != currentAzimuth)
       {
-        slewToAzimuth(slewDest);  
+        slewToAzimuth(toAzimuth);  
       }
     }
     else if (strCmd == "abrt")
@@ -287,11 +302,15 @@ void loop(void)
     else if (strCmd == "info")
     {
       Serial.print("0|0|");
-      Serial.print(Azimuth);
+      Serial.print(currentAzimuth);
       Serial.print("|");
       Serial.print(shStatus);
       Serial.print("|");
       Serial.println(Slewing);
+    }
+    else if (strCmd == "clos" || strCmd == "open")
+    {
+      sendShutter(cmd);
     }
   }
 } // End loop()
@@ -349,36 +368,75 @@ int getSMCVariable(unsigned char variableID)
   return readSMCByte() + 256 * readSMCByte();
 }
 
-void slewToAzimuth(int slewTo)
+void slewToAzimuth(int destination)
 {
   Slewing = 1;
-  int azDiff = abs(slewTo - Azimuth);
-  if (azDiff < 180)
+  
+  // Normalize the current azimuth and the destination to +/- 180
+  // TODO : Write this as a function
+  toAzmithNormalized = destination;
+  while (toAzmithNormalized > 180) toAzmithNormalized -= 360;
+  while (toAzmithNormalized < -180) toAzmithNormalized += 360;
+
+  currentAzimuthNormalized = currentAzimuth;
+  while (currentAzimuthNormalized > 180) currentAzimuthNormalized -= 360;
+  while (currentAzimuthNormalized < -180) currentAzimuthNormalized += 360;
+
+  travelDistanceNormalized = destination - currentAzimuthNormalized;
+  while (travelDistanceNormalized > 180) travelDistanceNormalized -= 360;
+  while (travelDistanceNormalized < -180) travelDistanceNormalized += 360;
+   
+  if (travelDistanceNormalized < 0)
   {
-    if (slewTo < Azimuth)
-    {
       setMotorSpeed(800);                 //  Counter-Clockwise
-      slewDir="CCW";
-    }
-    else
+  }
+  else
+  {
+    setMotorSpeed(-800);                //  Clockwise
+  }
+}
+
+void checkSlew()
+{
+  if (travelDistanceNormalized < 0)
+  {
+    currentAzimuthNormalized = currentAzimuth;
+    while (currentAzimuthNormalized > 180) currentAzimuthNormalized -= 360;
+    while (currentAzimuthNormalized < -180) currentAzimuthNormalized += 360;
+
+    travelDistanceNormalized = toAzmithNormalized - currentAzimuthNormalized;
+    while (travelDistanceNormalized > 180) travelDistanceNormalized -= 360;
+    while (travelDistanceNormalized < -180) travelDistanceNormalized += 360;
+
+    if (travelDistanceNormalized >= 0)
     {
-      setMotorSpeed(-800);                //  Clockwise
-      slewDir="CW";
+      setMotorSpeed(0);
+      Slewing=0;
+    }
+    else if (travelDistanceNormalized > -10)
+    {
+      setMotorSpeed(400);
     }
   }
   else
   {
-    if (slewTo < Azimuth)
+    currentAzimuthNormalized = currentAzimuth;
+    while (currentAzimuthNormalized > 180) currentAzimuthNormalized -= 360;
+    while (currentAzimuthNormalized < -180) currentAzimuthNormalized += 360;
+
+    travelDistanceNormalized = toAzmithNormalized - currentAzimuthNormalized;
+    while (travelDistanceNormalized > 180) travelDistanceNormalized -= 360;
+    while (travelDistanceNormalized < -180) travelDistanceNormalized += 360;
+
+    if (travelDistanceNormalized <= 0)
     {
-      setMotorSpeed(-800);                //  Clockwise
-      slewDir="CW";
+      setMotorSpeed(0);
+      Slewing=0;
     }
-    else
+    else if (travelDistanceNormalized < 10)
     {
-      setMotorSpeed(800);                 //  Counter-Clockwise
-      slewDir="CCW";
+      setMotorSpeed(-400);
     }    
   }
-  
 }
 
