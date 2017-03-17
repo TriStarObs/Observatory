@@ -68,6 +68,8 @@ byte shStatus=0;
 // Local variables
 int Azimuth = 0;
 int slewDest = 0;
+String slewDir = "CW";                    // Yes, this could be an enum or boolean or any number of more "elegant" things...but this is way easier to understand. :)
+bool Slewing = 0;
 unsigned long lastMillis = 0;
 unsigned long currentMillis = 0;
 String strCmd;
@@ -121,11 +123,6 @@ boolean sendShutter(byte (&cmdArray)[5])
       while(radio.available() )
       {
         radio.read(statusBytes, 6 );
-//        lcd.print(statusBytes[0]);
-//        lcd.print(" - ");
-//        lcd.print(statusBytes[1]);
-//        lcd.print(" - ");
-//        lcd.print(statusBytes[2]);
       }
     }
     return true;
@@ -182,51 +179,119 @@ void setup(){
   lcd.setCursor (0,2); 
     while (!radio.write( &cmd, 4 ))
     {
+      lcd.setCursor (0,2); 
       lcd.print("No connection to shutter.");
     }
   lcd.print("Shutter connected.");
+  shLimitStatus = statusBytes[0];
+  shErrorInfo = statusBytes[1];
+  shControllerTemp = statusBytes[2];
+  azOffset=statusBytes[3];
+  azIndicator=statusBytes[4];
+  shStatus=statusBytes[5];
+  currentMillis=millis();
+  lastMillis=currentMillis;
+  if (azIndicator == 0)
+  {
+    Azimuth = 180 - azOffset;
+  }
+  else
+  {
+    Azimuth = 180 + azOffset;
+  }
   delay(3000);
   lcd.clear();
-      for(int i = 0; i < sizeof(cmd); i++)
-      {
-        Serial.println(cmd[i]);
-      }
-
+  lcd.print("Az : ");
+  lcd.print(Azimuth);
 } // end setup()
 
 void loop(void) 
 {
-  if (getSMCVariable(SPEED) != 0)
+  if (Slewing)
   {
-    // Dome is turning, handle this first
-    if (Azimuth == slewDest)       // This may need to be changed, depending on timing.
+    if ((slewDir == "CW" && Azimuth >= slewDest) || (slewDir == "CCW" && Azimuth <= slewDest))
     {
+      Slewing=0;
       setMotorSpeed(0);
     }
-  }
-  while (Serial.available() > 0)
-  {
-    Serial.readBytesUntil('#', cmd, sizeof(cmd));
-//    for(int i = 0; i < sizeof(cmd); i++)
-//      {
-//        Serial.println(cmd[i]);
-//      }
-    strCmd = (char*)cmd;
-    if (strCmd.startsWith("s"))
+    else if (abs(Azimuth - slewDest) < 10)
     {
-      sendShutter(cmd);        
-      if (strCmd == "snfo")
-      {
-        for (int i=0; i < sizeof(statusBytes); i++)
-        {
-          Serial.print(statusBytes[i]);
-          Serial.println("#");
-        }
-      }
+     if (slewDir == "CW")
+     {   
+        setMotorSpeed(-400);
+     }
+     else
+     {
+        setMotorSpeed(400);
+     }
+    }
+  }
+
+  currentMillis=millis();
+  if (currentMillis - lastMillis > 1000)
+  {
+    String snfo = "snfo";
+    snfo.getBytes(cmd,5);
+    sendShutter(cmd);
+    shLimitStatus = statusBytes[0];
+    shErrorInfo = statusBytes[1];
+    shControllerTemp = statusBytes[2];
+    azOffset=statusBytes[3];
+    azIndicator=statusBytes[4];
+    shStatus=statusBytes[5];
+    lastMillis=currentMillis;
+    if (azIndicator == 0)
+    {
+      Azimuth = 180 - azOffset;
     }
     else
     {
-        sendDome(strCmd);
+      Azimuth = 180 + azOffset;
+    }
+    lcd.print("Az : ");
+    lcd.print(Azimuth);
+  }
+  
+  while (Serial.available() > 0)
+  {
+    Serial.readBytesUntil('#', cmd, sizeof(cmd));
+    strCmd = (char*)cmd;
+
+/*******************************************************
+ * Supported commands
+ * sNNN     :       Slew to the azimuth NNN°
+ * abrt     :       Abort any/all current movement (Dome rotation and shutter operations
+ * clos     :       Close Shutter
+ * open     :       Open Shutter
+ * home     :       Slew to home (0°)
+ * park     :       Park dome
+ * info     :       Request from ASCOM for all available property values
+                          * AtHome
+                          * AtPark
+                          * Azimuth
+                          * ShutterStatus
+                          * Slewing
+*******************************************************/
+    if (strCmd.startsWith("s"))
+    {
+      slewDest = strCmd.substring(1).toFloat();
+      if (slewDest > 0 && slewDest < 360 && slewDest != Azimuth)
+      {
+        slewToAzimuth(slewDest);  
+      }
+    }
+    else if (strCmd == "abrt")
+    {
+      setMotorSpeed(0);
+    }
+    else if (strCmd == "info")
+    {
+      Serial.print("0|0|");
+      Serial.print(Azimuth);
+      Serial.print("|");
+      Serial.print(shStatus);
+      Serial.print("|");
+      Serial.println(Slewing);
     }
   }
 } // End loop()
@@ -284,38 +349,35 @@ int getSMCVariable(unsigned char variableID)
   return readSMCByte() + 256 * readSMCByte();
 }
 
-
-
-void slewToAzimuth(float slewTo)
+void slewToAzimuth(int slewTo)
 {
-    setMotorSpeed(800);  
-}
-void sendDome(String command)
-{
-//  Serial.print("Got command ");
-//  Serial.println(command);
-  if (command=="dazm")
+  Slewing = 1;
+  int azDiff = abs(slewTo - Azimuth);
+  if (azDiff < 180)
   {
-//    Serial.println("Here I am");
-    Serial.print(Azimuth);
-    Serial.println("#");
-  }
-  else if (command.startsWith("m"))
-  {
-    slewDest = command.substring(1).toFloat();
-    if (Azimuth != slewDest)
+    if (slewTo < Azimuth)
     {
-      slewToAzimuth(slewDest);
+      setMotorSpeed(800);                 //  Counter-Clockwise
+      slewDir="CCW";
     }
-    
+    else
+    {
+      setMotorSpeed(-800);                //  Clockwise
+      slewDir="CW";
+    }
   }
-  else if (command=="dpos")
+  else
   {
-    setMotorSpeed(800);
-  }
-  else if (command=="dstp")
-  {
-    setMotorSpeed(0);
+    if (slewTo < Azimuth)
+    {
+      setMotorSpeed(-800);                //  Clockwise
+      slewDir="CW";
+    }
+    else
+    {
+      setMotorSpeed(800);                 //  Counter-Clockwise
+      slewDir="CCW";
+    }    
   }
   
 }
