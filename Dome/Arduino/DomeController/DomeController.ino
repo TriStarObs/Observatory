@@ -58,7 +58,7 @@ int toAzmithNormalized = 0;
 int currentAzimuthNormalized = 0;
 int travelDistance = 0;
 int travelDistanceNormalized = 0;
-///
+
 bool Slewing = 0;
 bool debugPrint = 0;
 bool atPark = 0;

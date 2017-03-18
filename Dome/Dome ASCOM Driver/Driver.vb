@@ -13,6 +13,7 @@
 ' Date			Who	Vers	Description
 ' -----------	---	-----	-------------------------------------------------------
 ' 18-FEB-2017	Eor	0.1.0	Initial edit, from Dome template
+' 18-MAR-2017   Eor 0.2.0   Decided to keep up with versions after a month.
 ' ---------------------------------------------------------------------------------
 '
 '
@@ -33,6 +34,7 @@ Imports System.Globalization
 Imports System.Runtime.InteropServices
 Imports System.Text
 Imports System.Threading
+Imports System.Timers
 
 
 <Guid("fad9f7cd-358c-4519-9e2f-ec9275a2750d")> _
@@ -64,6 +66,12 @@ Public Class Dome
     Private TL As TraceLogger ' Private variable to hold the trace logger object (creates a diagnostic log file with information that you specify)
     Private objSerial As ASCOM.Utilities.Serial
     Private Mutex As System.Threading.Mutex
+    Private WithEvents infoTimer As System.Timers.Timer
+    Private statusString As String = "0|0|0|0"
+    Private statusArray() As String = {"0", "0", "0", "0"}
+    Private splitOn() As Char = "|"
+    Private stAtPark As Boolean = False, stShutter As Integer = 1, stSlewing As Boolean = False
+
 
 
     '    Dim WithEvents Timer1 As New System.Timers.Timer
@@ -81,6 +89,8 @@ Public Class Dome
         connectedState = False ' Initialise connected to false
         utilities = New Util() ' Initialise util object
         astroUtilities = New AstroUtils 'Initialise new astro utiliites object
+        infoTimer = New Timers.Timer
+        infoTimer.Interval = 1000
 
         TL.LogMessage("Dome", "Completed initialisation")
     End Sub
@@ -137,8 +147,6 @@ Public Class Dome
     Public Function CommandString(ByVal Command As String, Optional ByVal Raw As Boolean = False) As String _
         Implements IDomeV2.CommandString
         ' TODO : something to ensure that only one command is in progress at a time
-        Mutex = New Mutex
-        Mutex.WaitOne()
         Try
             Dim response As String
             CheckConnected("CommandString")
@@ -149,8 +157,6 @@ Public Class Dome
         Catch ex As Exception
             Return "255"
             ' Throw New ApplicationException("CommandString failed.", ex)
-        Finally
-            Mutex.ReleaseMutex()
         End Try
     End Function
 
@@ -171,13 +177,15 @@ Public Class Dome
                 portNum = Right(comPort, Len(comPort) - 3)
                 objSerial = New ASCOM.Utilities.Serial
                 objSerial.Port = CInt(portNum)
-                objSerial.Speed = SerialSpeed.ps115200
+                objSerial.Speed = SerialSpeed.ps9600
                 objSerial.Connected = True
+                infoTimer.Enabled = True
             Else
                 connectedState = False
                 TL.LogMessage("Connected Set", "Disconnecting from port " + comPort)
                 objSerial.Connected = False
                 objSerial = Nothing
+                infoTimer.Enabled = False
             End If
         End Set
     End Property
@@ -263,16 +271,15 @@ Public Class Dome
 
     Public ReadOnly Property AtPark() As Boolean Implements IDomeV2.AtPark
         Get
-            ' TODO : Implement
-            TL.LogMessage("AtPark", "Not implemented")
-            Throw New ASCOM.PropertyNotImplementedException("AtPark", False)
+            TL.LogMessage("AtPark", stAtPark.ToString())
+            Return stAtPark
+            '            Throw New ASCOM.PropertyNotImplementedException("AtPark", False)
         End Get
     End Property
 
     Public ReadOnly Property Azimuth() As Double Implements IDomeV2.Azimuth
         Get
-            ' TODO : Change code to use local variables obtained from "info"
-            dblAzimuth = CDbl(CommandString("dazm#", True))
+            'dblAzimuth = CDbl(CommandString("dazm#", True))
             TL.LogMessage("Azimuth", dblAzimuth.ToString)
             Return dblAzimuth
         End Get
@@ -336,10 +343,8 @@ Public Class Dome
     End Property
 
     Public Sub CloseShutter() Implements IDomeV2.CloseShutter
-        'TODO : Change command to "clos", handle shutter status local variable
-        CommandBlind("shcl#", True)
-        TL.LogMessage("CloseShutter", "Shutter has been closed")
-        'domeShutterState = False
+        CommandBlind("clos#", True)
+        TL.LogMessage("CloseShutter", "Shutter close command sent")
     End Sub
 
     Public Sub FindHome() Implements IDomeV2.FindHome
@@ -348,15 +353,13 @@ Public Class Dome
     End Sub
 
     Public Sub OpenShutter() Implements IDomeV2.OpenShutter
-        'TODO : Change command to "open", handle shutter status local variable
-        TL.LogMessage("OpenShutter", "Shutter has been opened")
-        CommandBlind("shop#", True)
+        TL.LogMessage("OpenShutter", "Shutter open command sent")
+        CommandBlind("open#", True)
     End Sub
 
     Public Sub Park() Implements IDomeV2.Park
-        ' TODO : Implement
-        TL.LogMessage("Park", "Not implemented")
-        Throw New ASCOM.MethodNotImplementedException("Park")
+        TL.LogMessage("Park", "Shutter park command sent")
+        CommandBlind("park#", True)
     End Sub
 
     Public Sub SetPark() Implements IDomeV2.SetPark
@@ -367,30 +370,23 @@ Public Class Dome
     Public ReadOnly Property ShutterStatus() As ShutterState Implements IDomeV2.ShutterStatus
         Get
             'TODO : Fix this disgusting mess, get varibales from "info" and handle gracefully
-            Dim intShutterStatus As Integer = CInt(CommandString("snfo#"))
-            If intShutterStatus = 255 Then
-                TL.LogMessage("ShutterStatus", ShutterState.shutterError.ToString())
-                Return ShutterState.shutterError
-            Else
-                Dim strBinary As String = Convert.ToString(intShutterStatus, 2).PadLeft(8, "0"c)
-                strBinary = StrReverse(strBinary)
-                If GetBit(strBinary, 4) Or GetBit(strBinary, 5) Then
-                    TL.LogMessage("ShutterStatus", ShutterState.shutterError.ToString())
-                    Return ShutterState.shutterError
-                ElseIf GetBit(strBinary, 0) Then
+            Select Case stShutter
+                Case 0
                     TL.LogMessage("ShutterStatus", ShutterState.shutterOpen.ToString())
                     Return ShutterState.shutterOpen
-                ElseIf GetBit(strBinary, 1) Then
+                Case 1
                     TL.LogMessage("ShutterStatus", ShutterState.shutterClosed.ToString())
                     Return ShutterState.shutterClosed
-                ElseIf GetBit(strBinary, 2) Then
+                Case 2
                     TL.LogMessage("ShutterStatus", ShutterState.shutterOpening.ToString())
                     Return ShutterState.shutterOpening
-                ElseIf GetBit(strBinary, 3) Then
+                Case 3
                     TL.LogMessage("ShutterStatus", ShutterState.shutterClosing.ToString())
                     Return ShutterState.shutterClosing
-                End If
-            End If
+                Case Else
+                    TL.LogMessage("ShutterStatus", ShutterState.shutterError.ToString())
+                    Return ShutterState.shutterError
+            End Select
         End Get
     End Property
 
@@ -412,17 +408,14 @@ Public Class Dome
     End Sub
 
     Public Sub SlewToAzimuth(Azimuth As Double) Implements IDomeV2.SlewToAzimuth
-        'TODO : Fix w/ correct code sNNN
-        CommandBlind("m" & Azimuth.ToString & "#")
+        CommandBlind("s" & Azimuth.ToString & "#")
         TL.LogMessage("SlewToAzimuth", "Slew to " & Azimuth.ToString)
-        'Throw New ASCOM.MethodNotImplementedException("SlewToAzimuth")
     End Sub
 
     Public ReadOnly Property Slewing() As Boolean Implements IDomeV2.Slewing
-        ' TODO : Implement
         Get
-            TL.LogMessage("Slewing Get", False.ToString())
-            Return False
+            TL.LogMessage("Slewing Get", stSlewing.ToString())
+            Return stSlewing
         End Get
     End Property
 
@@ -496,10 +489,13 @@ Public Class Dome
 
     End Sub
 
-    Private Function GetBit(ByVal BinaryString As String, ByVal position As Integer) As Boolean
-        Return (Mid(BinaryString, position + 1, 1) = "1")
-    End Function
-
+    Private Sub infoTimer_Elapsed(sender As Object, e As ElapsedEventArgs) Handles infoTimer.Elapsed
+        statusString = CommandString("info#")
+        statusArray = statusString.Split(splitOn, StringSplitOptions.None)
+        stAtPark = CBool(statusArray(0))
+        dblAzimuth = CDbl(statusArray(1))
+        stShutter = CInt(statusArray(2))
+        stSlewing = CBool(statusArray(3))
+    End Sub
 #End Region
-
 End Class
