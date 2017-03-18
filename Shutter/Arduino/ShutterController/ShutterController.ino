@@ -1,7 +1,7 @@
 /*************************************************************************
    TriStar Observatory Shutter Controller
-   2017MAR14
-   v0.2.6
+   2017MAR18
+   v0.2.7
 
    This shutter slave will handle all shutter control functions, and report
    shutter information to the dome master to relay to ASCOM.
@@ -85,11 +85,6 @@ void setup() {
   // Start up compass
   compass.begin();       // Include true for troubleshooting/debugging info
   
-// Debug
-//  Serial.println("TriStar Observatory");
-//  Serial.println("Shutter Control");
-
-
   // Reset SMC when Arduino starts up
   pinMode(resetPin, OUTPUT);
   digitalWrite(resetPin, LOW);  // reset SMC
@@ -155,9 +150,7 @@ void loop(void)
   {
     radio.read( &cmd, 4 );
     String theCommand = (char*)cmd;
-//    theCommand.remove(4);
     doCommand(theCommand);
-//    printDebug();
   }   //end while
 }   //end loop
 
@@ -327,48 +320,6 @@ void stuffStatus()
   radio.writeAckPayload(1, statusPayload, sizeof(statusPayload) );
 } // end stuffStatus()
 
-// print status and other info to serial monitor for debugging
-void printDebug()
-{
-  Serial.print("Limit byte : ");
-  Serial.println(statusPayload[0]);
-  Serial.print("Error byte : ");
-  Serial.println(statusPayload[1]);
-  Serial.print("Temp byte : ");
-  Serial.println(statusPayload[2]);
-  Serial.print("Azimuth : ");
-  Serial.println(azimuth);
-  Serial.print("Azimuth Offset byte : ");
-  Serial.println(statusPayload[3]);
-  Serial.print("Offset Multiplier byte : ");
-  Serial.println(statusPayload[4]);
-  Serial.print("VIn : ");
-  Serial.print(voltage);
-  Serial.println("V");
-  Serial.print("Shutter : ");
-  Serial.print(statusPayload[5]);
-  switch (statusPayload[5])
-  {
-    case 0:
-      Serial.println(" - Open");
-      break;
-    case 1:
-      Serial.println(" - Closed");
-      break;
-    case 2:
-      Serial.println(" - Opening");
-      break;
-    case 3:
-      Serial.println(" - Closing");
-      break;
-    case 4:
-      Serial.println(" - Error");
-      break;
-      
-  }
-  Serial.println("-------------------------");
-} // end printDebug()
-
 //  doCommand function for handling shutter commands
 void doCommand(String command)
 {
@@ -376,26 +327,18 @@ void doCommand(String command)
   if (command == "clos")            // Close shutter
   {
     setMotorSpeed(800);
-//    printDebug();
   }
   else if (command == "open")       // Open shutter
   {
     setMotorSpeed(-800);
-//    printDebug();
   }
   else if (command == "xxxx")       // halt shutter immediately
   {
     setMotorSpeed(0);
-//    printDebug();
   }
   else if (command == "rset")            // Reset shutter
   {
     exitSafeStart();
-//    printDebug();
-  }
-  else if (command == "snfo")       // Get shutter info
-  {
-//    printDebug();
   }
 } //end doCommand()
 
