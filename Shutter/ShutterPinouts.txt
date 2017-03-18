@@ -1,0 +1,27 @@
+Analog
+
+	A4		White		Compass SDA
+	A5		Blue		Compass SCL	
+	
+Digital
+
+	1
+	2
+	3		Blue		SoftwareSerial RX = SMC TX
+	4		Green		SoftwareSerial TX = SMC RX
+	5		Brown		SMC RST
+	6		Grey		SMC ERR
+	7		Orange		RF24 CE
+	8		Yellow		RF24 CSN
+	9
+	10
+	11		Blue		RF24 MOSI
+	12		Purple		RF24 MISO
+	13		Green		RF24 SCK                                                                                                                                                                          
+
+SMC
+	A1 & -	Yellow		Closed limit switch
+	A2 & -	Orange		Open Limit Switch
+	OUTA				Motor Ground
+	OUTB				Motor Pos
+	GND					PS Ground
