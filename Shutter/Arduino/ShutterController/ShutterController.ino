@@ -1,24 +1,25 @@
 /*************************************************************************
- * TriStar Observatory Shutter Slave
- * 2017FEB13
- * v0.1
- * 
- * The shutter slave will handle all shutter control functions, and report  
- * shutter information to the dome master to relay to ASCOM.
- * 
- * Parts derived from maniacbug's RF24 library pingpair_ack example
- * 
- * 
- * 
+   TriStar Observatory Shutter Controller
+   2017MAR18
+   v0.2.7
+
+   This shutter slave will handle all shutter control functions, and report
+   shutter information to the dome master to relay to ASCOM.
+
+   Parts derived from :
+      * maniacbug's RF24 library pingpair_ack example
+      * Pololu's SMC Arduino examples
+
  *************************************************************************/
 
+// Included libraries
 #include <SPI.h>
 #include <SoftwareSerial.h>
 #include "RF24.h"
+#include <HMC5983.h>
+#include <Wire.h>
 
-// Hardware configuration: nRF24L01 radio on SPI bus plus pins 7 & 8 
-RF24 radio(7,8);
-
+//***** Variables, constants, and defines *****//
 
 // Pololu SMC config
 const int rxPin = 3;          // pin 3 connects to SMC TX
@@ -26,13 +27,9 @@ const int txPin = 4;          // pin 4 connects to SMC RX
 const int resetPin = 5;       // pin 5 connects to SMC nRST
 const int errPin = 6;         // pin 6 connects to SMC ERR
 
-// Setup SoftwareSerial for communication w/ SMC
-SoftwareSerial smcSerial = SoftwareSerial(rxPin, txPin);
-
 // SMC Variable IDs
 #define ERROR_STATUS 0
 #define LIMIT_STATUS 3
-#define TARGET_SPEED 20
 #define SPEED 21
 #define INPUT_VOLTAGE 23
 #define TEMPERATURE 24
@@ -44,32 +41,140 @@ SoftwareSerial smcSerial = SoftwareSerial(rxPin, txPin);
 #define REVERSE_DECELERATION 10
 #define DECELERATION 2
 
+// Variables for SMC values
+uint16_t limitStatus = 0;
+int motorSpeed = 0;
+int errorStatus = 0;
+float voltage=0.0;
+int temp=0;
+int shutterStatus=0;
+
 // Variables for RF24 data
-byte statusPayload[3];
-byte pipeNum;
-byte cmd[4];
+byte statusPayload[6];
+byte cmd[5];
 
 // Timer variables for stuffStatus() call
-unsigned long lastMillis=0;
-unsigned long currentMillis=0;
+unsigned long lastMillis = 0;
+unsigned long currentMillis = 0;
 
-// read an SMC serial byte
+// Variables for compass data
+float compassReading = -999;
+int numReadings=20;
+float azimuth = 0.0;
+
+//***** Instances of various hardware & comms *****//
+
+// nRF24L01 radio on SPI bus plus pins 7 & 8
+RF24 radio(7, 8);
+
+// SoftwareSerial for communication w/ SMC
+SoftwareSerial smcSerial = SoftwareSerial(rxPin, txPin);
+
+// Compass
+HMC5983 compass;
+
+//***** Main Setup() and Loop() functions *****//
+
+void setup() {
+
+  //Serial lines
+  
+  Serial.begin(9600);       // For serial monitor troubleshooting
+  smcSerial.begin(19200);   // Begin serial to SMC
+
+  // Start up compass
+  compass.begin();       // Include true for troubleshooting/debugging info
+  
+  // Reset SMC when Arduino starts up
+  pinMode(resetPin, OUTPUT);
+  digitalWrite(resetPin, LOW);  // reset SMC
+  delay(1);  // wait 1 ms
+  pinMode(resetPin, INPUT);  // let SMC run again
+
+  // must wait at least 1 ms after reset before transmitting
+  delay(10);
+
+  // Set up motor controller.
+  smcSerial.write(0xAA);  // send baud-indicator byte
+  setMotorLimit(FORWARD_ACCELERATION, 100);
+  setMotorLimit(REVERSE_ACCELERATION, 100);
+  setMotorLimit(FORWARD_DECELERATION, 100);
+  setMotorLimit(REVERSE_DECELERATION, 100);
+  setMotorLimit(DECELERATION, 1);
+
+  // clear the safe-start violation and let the motor run
+  exitSafeStart();
+
+  // Setup and configure rf radio
+
+  radio.begin();
+  radio.setAutoAck(true);
+  radio.enableAckPayload();               // Allow optional ack payloads
+  radio.setRetries(2, 15);                // Min time between retries, max # of retries
+  radio.openReadingPipe(1, 0xABCDABCD71LL); // No need for a writing pipe for Ack payloads
+  radio.startListening();                 // Start listening
+  radio.setDataRate(RF24_1MBPS);          // Works best, for some reason
+  radio.setPALevel(RF24_PA_MIN);          // Issues with LOW?
+  radio.setChannel(77);                   // In US, channel should be betwene 70-80
+
+  // Do our first stuffStatus
+  stuffStatus();
+  lastMillis = millis();              // We'll compare this in loop(), and poll status every 1s
+  doCommand("snfo");                  // This will update the LCD for our initial readout
+  
+}   //end setup
+
+void loop(void)
+{
+
+  // SMC Error Status == 1 if only error is Safe Start Violation.  Since
+  // all other errors are 0, it is safe to exit Safe Start
+  if (getSMCVariable(ERROR_STATUS) == 1)
+  {
+    exitSafeStart();
+  }   // end if
+
+  // Build status payload
+  stuffStatus();
+    
+//  // Print debug info every 3s
+//  currentMillis = millis();
+//  if (currentMillis - lastMillis > 3000)
+//  {
+//    printDebug();
+//    lastMillis = currentMillis;
+//  }   // end if
+
+  // Check for command and execute it
+  if ( radio.available())
+  {
+    radio.read( &cmd, 4 );
+    String theCommand = (char*)cmd;
+    doCommand(theCommand);
+  }   //end while
+}   //end loop
+
+//***** Program Functions *****//
+
+// readSMCByte : Read an SMC serial byte
 int readSMCByte()
 {
   char c;
-  if(smcSerial.readBytes(&c, 1) == 0){ return -1; }
+  if (smcSerial.readBytes(&c, 1) == 0) {
+    return -1;
+  }
   return (byte)c;
-}
+} //end readSMCByte()
 
+// exitSafeStart : Exits controller Safe Start mode
 // required to allow motor to move
 // must be called when controller restarts and after any error
 void exitSafeStart()
 {
   smcSerial.write(0x83);
-}
+} //end exitSafeStart()
 
-// speed should be a number from -3200 to 3200
-// TODO : I'll be using a set speed, so this can probbaly go away to save mem.
+// setMotorspeed : Move the motor
 void setMotorSpeed(int speed)
 {
   if (speed < 0)
@@ -83,8 +188,9 @@ void setMotorSpeed(int speed)
   }
   smcSerial.write(speed & 0x1F);
   smcSerial.write(speed >> 5);
-}
+} //end setMotorspeed()
 
+// setMotorLimit : Function to set motor limits
 unsigned char setMotorLimit(unsigned char  limitID, unsigned int limitValue)
 {
   smcSerial.write(0xA2);
@@ -92,29 +198,19 @@ unsigned char setMotorLimit(unsigned char  limitID, unsigned int limitValue)
   smcSerial.write(limitValue & 0x7F);
   smcSerial.write(limitValue >> 7);
   return readSMCByte();
-}
+} //end setMotorLimit()
 
-// returns the specified variable as an unsigned integer.
-// if the requested variable is signed, the value returned by this function
-// should be typecast as an int.
+// getSMCVariable : returns the specified variable as an unsigned integer.
 int getSMCVariable(unsigned char variableID)
 {
   smcSerial.write(0xA1);
   smcSerial.write(variableID);
   return readSMCByte() + 256 * readSMCByte();
-}
+} // end getSMCVariable()
 
-// Stuff the statusPayload bytes
+// Stuff status bytes into RF24 Ack Payload byte array named statusPayload
 /**********************************************************************
-  0 : Binary status indicators according to the following table
-    0   Shutter is Open
-    1   Shutter is Closed
-    2   Shutter is Opening
-    3   Shutter is Closing
-    4   Shutter Error (Any error.  Details in next byte)
-    5   Shutter is stopped (Neither open nor closed)
-    6   Reserved
-    7   Reserved
+  0 : Binary limit status indicators according to the table below
   1 : Error byte.  Pulled from SMC Error Status, with some bits dropped
     0   Safe Start Violation
     1   Serial Error (Requires Exit from Safe Start AND valid speed command)
@@ -125,25 +221,35 @@ int getSMCVariable(unsigned char variableID)
     6   Motor Driver Error
     7   ERR Line High (With no other error)
   2 : Controller temperature
-
+  3 : Azimuth offset from 180°
+  4 : Indicator Azimuth offset, 1 or 0.  1 is 180 + offset, 0 is 180 - offset
+  5 : Shutter status, mapped to ASCOM ShutterState http://www.ascom-standards.org/Help/Developer/html/T_ASCOM_DeviceInterface_ShutterState.htm
 **********************************************************************/
 
 void stuffStatus()
 {
-  statusPayload[0]=0;
-  uint16_t limitStatus = getSMCVariable(LIMIT_STATUS);
-  int motorSpeed = getSMCVariable(SPEED);
-  int errorStatus = getSMCVariable(ERROR_STATUS);
+  statusPayload[0] = 0;
+  statusPayload[1] = 0;
+  statusPayload[2] = 0;
+  statusPayload[3] = 0;
+  statusPayload[4] = 0;
+  statusPayload[5] = 0;
 
-  // Stuff status byte 0
-  bitWrite(statusPayload[0], 0, bitRead(limitStatus,8));                  // LIMIT_STATUS Bit 8 is AN2 (Open side) limit switch active
-  bitWrite(statusPayload[0], 1, bitRead(limitStatus,7));                  // LIMIT_STATUS Bit 7 is AN1 (Closed side) limit switch active
+  limitStatus = getSMCVariable(LIMIT_STATUS);
+  motorSpeed = getSMCVariable(SPEED);
+  errorStatus = getSMCVariable(ERROR_STATUS);
+  voltage = float(float(getSMCVariable(INPUT_VOLTAGE)) / 1000), 1;
+
+  // Stuff status byte 0 (Limit info)
+  bitWrite(statusPayload[0], 0, bitRead(limitStatus, 8));                 // LIMIT_STATUS Bit 8 is AN2 (Open side) limit switch active
+  bitWrite(statusPayload[0], 1, bitRead(limitStatus, 7));                 // LIMIT_STATUS Bit 7 is AN1 (Closed side) limit switch active
   bitWrite(statusPayload[0], 2, motorSpeed < 0);                          // Negative motor speed is actively moving, opening the shutter
-  bitWrite(statusPayload[0], 3, motorSpeed > 0);                          // Negative motor speed is actively moving, opening the shutter  
+  bitWrite(statusPayload[0], 3, motorSpeed > 0);                          // Positive motor speed is actively moving, Closing the shutter
   bitWrite(statusPayload[0], 4, errorStatus > 0);                         // If ERROR_STATUS > 0, some error has occurred.
   bitWrite(statusPayload[0], 5, (limitStatus == 0 && motorSpeed == 0));   // If no limit switch is active, and speed is 0, shutter is stopped between limits
+  //bitWrite(statusPayload[0], 6, (limitStatus > 0 && motorSpeed != 0));    // If either limit switch is active, and motor is moving, we have an issue
 
-  // Stuff status byte 1
+  // Stuff status byte 1 (Error info)
   bitWrite(statusPayload[1], 0, bitRead(errorStatus, 0));                  // Reference : https://www.pololu.com/docs/0J44/6.4
   bitWrite(statusPayload[1], 1, bitRead(errorStatus, 2));
   bitWrite(statusPayload[1], 2, bitRead(errorStatus, 4));
@@ -153,144 +259,86 @@ void stuffStatus()
   bitWrite(statusPayload[1], 6, bitRead(errorStatus, 8));
   bitWrite(statusPayload[1], 7, bitRead(errorStatus, 9));
 
-  // Byte 2 is rounded temp from SMC
-  int temp = round(float(getSMCVariable(TEMPERATURE)) / 10);
-  statusPayload[2] = temp;
+  // Stuff status byte 2 (Controller temp)
+  statusPayload[2] = round(float(getSMCVariable(TEMPERATURE)) / 10);
+  temp = statusPayload[2];
+  
+  // Stuff status bytes 3 and 4 (Azimuth)
+   // Average numReadings current valid compass readings for the current azimuth
+    azimuth = 0.0;
+    for (int i = 1; i <= numReadings; i++)
+    {
+      compassReading = -999;             // Reset to default condition
+      compassReading = compass.read();   // This should put a value into c if the compass is alive
+      if (compassReading != -999)
+      {
+        // Valid reading, include in average
+        azimuth = azimuth + (compassReading - azimuth);  
+      }
+      else
+      {
+        // No reading from compass, discard this value and try again
+        --i;
+      }
+    }
+    statusPayload[3] = abs(180.0 - round(azimuth));
+    if (azimuth < 180.0)
+    {
+      statusPayload[4] = 0  ;
+    }
+    else
+    {
+      statusPayload[4] = 1;
+    }
 
-////  radio.flush_rx();
-//  radio.writeAckPayload(1,statusPayload, 3 );
+  // Stuff status byte 5 (Shutter Status)
+  shutterStatus = 4;                 // Start with an error condition, force some valid condition to overwrite it
+  if (limitStatus == 0)             // Neither limit switch is closed.  Note if motorSpeed = 0, this is an error.
+  {
+    if (motorSpeed > 0)
+    {
+      shutterStatus = 3;            // Closing
+    }
+    else if (motorSpeed < 0)
+    {
+      shutterStatus = 2;            // Opening
+    }
+  }
+  else                              // Something is limiting the motor.  We'll check for closed limit switches.  Anything else is an error.
+  {
+    if (statusPayload[0] == 1)
+    {
+      shutterStatus = 0;            // Open
+    }
+    else if (statusPayload[0] == 2)
+    {
+      shutterStatus = 1;            // Closed
+    }
+  }
+  statusPayload[5] = shutterStatus;
+  radio.flush_tx();
+  radio.writeAckPayload(1, statusPayload, sizeof(statusPayload) );
+} // end stuffStatus()
 
-  // DEBUG
-  // Serial.println("statusPayload stuffed");
-
-}
-
+//  doCommand function for handling shutter commands
 void doCommand(String command)
 {
-  if (command=="clos")  
-   {
-     setMotorSpeed(800);
-   }
-  else if (command=="open")  
-   {
-     setMotorSpeed(-800);
-   }
-  else if (command=="xxxx")  
-   {
-     setMotorSpeed(0);
-   }
-  if (command=="rset")
-    {
-        exitSafeStart();
-    }
-  else if (command=="info")
-    {
-      Serial.print("Controller Temp : ");
-      Serial.print(float(float(getSMCVariable(TEMPERATURE)) / 10),1);
-      Serial.print(char(186));
-      Serial.println("C");
-      Serial.print("Error Status: 0x");
-      Serial.println(getSMCVariable(ERROR_STATUS), BIN);
-      Serial.print("VIN = ");
-      Serial.print(float(float(getSMCVariable(INPUT_VOLTAGE)) / 1000));
-      Serial.println(" V");        
-      Serial.print("Limit Status = ");
-      Serial.print(getSMCVariable(LIMIT_STATUS),DEC);
-      Serial.print(" - ");
-      Serial.println(getSMCVariable(LIMIT_STATUS),BIN);
-      Serial.print("Motor Speed = ");
-      Serial.println(getSMCVariable(SPEED),DEC);
-      Serial.println();
-      Serial.print("statusPayload[0] = ");
-      Serial.print(statusPayload[0],DEC);
-      Serial.print(" - ");
-      Serial.println(statusPayload[0],BIN);
-      Serial.print("statusPayload[1] = ");
-      Serial.print(statusPayload[1],DEC);
-      Serial.print(" - ");
-      Serial.println(statusPayload[1],BIN);
-      Serial.print("statusPayload[2] = ");
-      Serial.print(statusPayload[2],DEC);
-      Serial.print(" - ");
-      Serial.println(statusPayload[2],BIN);
-      Serial.println();
-    }
-}
-void setup(){
-
-  Serial.begin(115200);
-  Serial.println(F("TriStar Observatory : Shutter Secondary Controller"));
-  smcSerial.begin(19200);
-
-  // Reset SMC when Arduino starts up
-  pinMode(resetPin, OUTPUT);
-  digitalWrite(resetPin, LOW);  // reset SMC
-  delay(1);  // wait 1 ms
-  pinMode(resetPin, INPUT);  // let SMC run again
-
-  // must wait at least 1 ms after reset before transmitting
-  delay(5);
-
-  // this lets us read the state of the SMC ERR pin (optional)
-  // pinMode(errPin, INPUT);
-
-  smcSerial.write(0xAA);  // send baud-indicator byte
-  setMotorLimit(FORWARD_ACCELERATION, 100);
-  setMotorLimit(REVERSE_ACCELERATION, 100);
-  setMotorLimit(FORWARD_DECELERATION, 100);
-  setMotorLimit(REVERSE_DECELERATION, 100);
-  setMotorLimit(DECELERATION, 1);
   
-  // clear the safe-start violation and let the motor run
-  exitSafeStart();
-
-  // Do our first stuffStatus
-  stuffStatus();
-  lastMillis = millis();             // We'll compare this in loop(), and poll status every 5s
-  
-  // Setup and configure rf radio
-
-  radio.begin();
-  radio.setAutoAck(true);
-  radio.enableAckPayload();               // Allow optional ack payloads
-  radio.setRetries(0,15);                 // Min time between retries, max # of retries
-  radio.openReadingPipe(1,0xABCDABCD71LL);// No need for a writing pipe for Ack payloads
-  radio.startListening();                 // Start listening
-  radio.setDataRate(RF24_1MBPS);          // Works best, for some reason
-  radio.setPALevel(RF24_PA_MIN);          // Issues with LOW?
-  radio.setChannel(77);                   // In US, channel should be betwene 70-80
-//  radio.printDetails();                 // Dump the configuration of the rf unit 
-                                          // for debugging
-  radio.flush_tx();
-  radio.writeAckPayload(1,statusPayload, 3 );
-}   //end setup
-
-void loop(void) 
-{
-// SMC Error Status == 1 if only error is Safe Start Violation.  Since
-// all other errors are 0, it is safe to exit Safe Start
-
-  if (getSMCVariable(ERROR_STATUS) == 1) 
+  if (command == "clos")            // Close shutter
+  {
+    setMotorSpeed(800);
+  }
+  else if (command == "open")       // Open shutter
+  {
+    setMotorSpeed(-800);
+  }
+  else if (command == "xxxx")       // halt shutter immediately
+  {
+    setMotorSpeed(0);
+  }
+  else if (command == "rset")            // Reset shutter
   {
     exitSafeStart();
   }
+} //end doCommand()
 
-  currentMillis = millis();
-  if (currentMillis - lastMillis > 5000)
-  {
-    stuffStatus();
-    lastMillis = currentMillis;
-    radio.flush_tx();
-    radio.writeAckPayload(1,statusPayload, 3 );
-  }
-
-  while( radio.available())
-  {
-    radio.read( &cmd, 4 );
-    String theCommand = (char*)cmd;
-    theCommand.remove(4);
-    Serial.print("Received command : ");
-    Serial.println(theCommand);
-    doCommand(theCommand);
-  }   //end while
-}   //end loop
