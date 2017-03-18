@@ -243,11 +243,10 @@ void stuffStatus()
   // Stuff status byte 0 (Limit info)
   bitWrite(statusPayload[0], 0, bitRead(limitStatus, 8));                 // LIMIT_STATUS Bit 8 is AN2 (Open side) limit switch active
   bitWrite(statusPayload[0], 1, bitRead(limitStatus, 7));                 // LIMIT_STATUS Bit 7 is AN1 (Closed side) limit switch active
-  bitWrite(statusPayload[0], 2, motorSpeed < 0);                          // Negative motor speed is actively moving, opening the shutter
-  bitWrite(statusPayload[0], 3, motorSpeed > 0);                          // Positive motor speed is actively moving, Closing the shutter
+//  bitWrite(statusPayload[0], 2, motorSpeed < 0);                          // Negative motor speed is actively moving, opening the shutter
+//  bitWrite(statusPayload[0], 3, motorSpeed > 0);                          // Positive motor speed is actively moving, Closing the shutter
   bitWrite(statusPayload[0], 4, errorStatus > 0);                         // If ERROR_STATUS > 0, some error has occurred.
   bitWrite(statusPayload[0], 5, (limitStatus == 0 && motorSpeed == 0));   // If no limit switch is active, and speed is 0, shutter is stopped between limits
-  //bitWrite(statusPayload[0], 6, (limitStatus > 0 && motorSpeed != 0));    // If either limit switch is active, and motor is moving, we have an issue
 
   // Stuff status byte 1 (Error info)
   bitWrite(statusPayload[1], 0, bitRead(errorStatus, 0));                  // Reference : https://www.pololu.com/docs/0J44/6.4
