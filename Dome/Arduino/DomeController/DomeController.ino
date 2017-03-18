@@ -16,23 +16,9 @@
  *************************************************************************/
 
 #include <SPI.h>
-#include <LCD.h>
-#include <LiquidCrystal_I2C.h>
 #include <SoftwareSerial.h>
 #include "RF24.h"
 #include <Wire.h>
-
-// LCD Pin assignments
-#define I2C_ADDR    0x27 
-#define BACKLIGHT_PIN     3
-#define BACKLIGHT_BRIGHTNESS    9
-#define En_pin  2
-#define Rw_pin  1
-#define Rs_pin  0
-#define D4_pin  4
-#define D5_pin  5
-#define D6_pin  6
-#define D7_pin  7
 
 //***** Variables, constants, and defines *****//
 
@@ -74,6 +60,8 @@ int travelDistance = 0;
 int travelDistanceNormalized = 0;
 
 bool Slewing = 0;
+bool debugPrint = 0;
+bool atPark = 0;
 
 unsigned long lastMillis = 0;
 unsigned long currentMillis = 0;
@@ -98,9 +86,6 @@ byte statusBytes[6];                      // Array for shutter status
 
 //***** Instances of various hardware & comms *****//
 
-// LCD
-LiquidCrystal_I2C  lcd(I2C_ADDR,En_pin,Rw_pin,Rs_pin,D4_pin,D5_pin,D6_pin,D7_pin);
-
 // SoftwareSerial for communication w/ SMC
 SoftwareSerial smcSerial = SoftwareSerial(rxPin, txPin);
 
@@ -113,22 +98,24 @@ boolean sendShutter(byte (&cmdArray)[5])
 {
   if (!radio.write( &cmdArray, sizeof(cmdArray) ))
   {
-    lcd.clear();
-    lcd.print("Sending of shutter");
-    lcd.setCursor(0,1);
-    lcd.print("command failed.");
+    if (debugPrint)
+    {
+      Serial.println("Sending of shutter command failed!");
+    }
     return false;
   }
   else
   {
     if(!radio.available())
     { 
-      lcd.clear();
-      lcd.print("Blank Payload.");
+      if (debugPrint)
+      {
+        Serial.println("Blank Payload.");  
+      }
+      return false;
     }
     else
     {
-      lcd.clear();
       while(radio.available() )
       {
         radio.read(statusBytes, 6 );
@@ -177,21 +164,11 @@ void setup(){
   // clear the safe-start violation and let the motor run
   exitSafeStart();
   
-  lcd.begin (20,4);
-  lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
-  lcd.setBacklight(HIGH);
-  analogWrite(BACKLIGHT_BRIGHTNESS,128);
-  lcd.clear();
-  lcd.print("TriStar Observatory");
-  lcd.setCursor (0,1); 
-  lcd.print("Dome Control");
-  lcd.setCursor (0,2); 
-    while (!radio.write( &cmd, 4 ))
+  while (!radio.write( &cmd, 4 )) 
     {
-      lcd.setCursor (0,2); 
-      lcd.print("No connection to shutter.");
+      Serial.println("No connection to shutter");
     }
-  lcd.print("Shutter connected.");
+
   shLimitStatus = statusBytes[0];
   shErrorInfo = statusBytes[1];
   shControllerTemp = statusBytes[2];
@@ -208,10 +185,11 @@ void setup(){
   {
     currentAzimuth = 180 + azOffset;
   }
-  delay(3000);
-  lcd.clear();
-  lcd.print("Az : ");
-  lcd.print(currentAzimuth);
+
+  if (currentAzimuth == 0 && shStatus == 1)
+  {
+    atPark = 1;
+  }
 } // end setup()
 
 void loop(void) 
@@ -224,47 +202,8 @@ void loop(void)
   currentMillis=millis();
   if (currentMillis - lastMillis > 1000)
   {
-    String snfo = "snfo";
-    snfo.getBytes(cmd,5);
-    sendShutter(cmd);
-    shLimitStatus = statusBytes[0];
-    shErrorInfo = statusBytes[1];
-    shControllerTemp = statusBytes[2];
-    azOffset=statusBytes[3];
-    azIndicator=statusBytes[4];
-    shStatus=statusBytes[5];
     lastMillis=currentMillis;
-    if (azIndicator == 0)
-    {
-      currentAzimuth = 180 - azOffset;
-    }
-    else
-    {
-      currentAzimuth = 180 + azOffset;
-    }
-
-//                          * AtHome
-//                          * AtPark
-//                          * Azimuth
-//                          * ShutterStatus
-//                          * Slewing
-                          
-    lcd.print("Az: ");
-    lcd.print(currentAzimuth);
-    lcd.setCursor(16 - shArray[shStatus].length(), 0);
-    lcd.print("Sh: ");
-    lcd.print(shArray[shStatus]);
-    lcd.setCursor(0,1);
-    lcd.print("Dome: ");
-    if (Slewing)
-    {
-      lcd.print("Slewing to ");
-      lcd.print(toAzimuth);
-    }
-    else
-    {
-      lcd.print("Stationary");
-    }
+    getInfo();    
   }
   
   while (Serial.available() > 0)
@@ -278,10 +217,8 @@ void loop(void)
  * abrt     :       Abort any/all current movement (Dome rotation and shutter operations
  * clos     :       Close Shutter
  * open     :       Open Shutter
- * home     :       Slew to home (0°)
- * park     :       Park dome
+ * park     :       Park dome : Slew to 0° & close shutter
  * info     :       Request from ASCOM for all available property values
-                          * AtHome
                           * AtPark
                           * Azimuth
                           * ShutterStatus
@@ -289,6 +226,7 @@ void loop(void)
 *******************************************************/
     if (strCmd.startsWith("s"))
     {
+      atPark = 0;
       toAzimuth = strCmd.substring(1).toFloat();
       if (toAzimuth >= 0 && toAzimuth < 360 && toAzimuth != currentAzimuth)
       {
@@ -298,24 +236,85 @@ void loop(void)
     else if (strCmd == "abrt")
     {
       setMotorSpeed(0);
+      String xxxx = "xxxx";
+      xxxx.getBytes(cmd,5);
+      sendShutter(cmd);
     }
     else if (strCmd == "info")
     {
-      Serial.print("0|0|");
+      Serial.print(atPark);
+      Serial.print("|");
       Serial.print(currentAzimuth);
       Serial.print("|");
       Serial.print(shStatus);
       Serial.print("|");
-      Serial.println(Slewing);
+      Serial.print(Slewing);
+      Serial.println("#");
     }
     else if (strCmd == "clos" || strCmd == "open")
     {
+      atPark = 0;
       sendShutter(cmd);
+    }
+    else if (strCmd == "park")
+    {
+      if (!atPark)
+      {
+        slewToAzimuth(0);
+        if (shStatus != 1)
+        {
+          String clos="clos";
+          clos.getBytes(cmd,5);
+          sendShutter(cmd);
+        }
+        atPark = 1;
+      }
     }
   }
 } // End loop()
 
 //***** Program Functions *****//
+
+void getInfo()
+{
+  String strEmpty = "info";
+  strEmpty.getBytes(cmd,5);
+  sendShutter(cmd);
+
+  shLimitStatus = statusBytes[0];
+  shErrorInfo = statusBytes[1];
+  shControllerTemp = statusBytes[2];
+  azOffset=statusBytes[3];
+  azIndicator=statusBytes[4];
+  shStatus=statusBytes[5];
+
+  if (azIndicator == 0)
+  {
+    currentAzimuth = 180 - azOffset;
+  }
+  else
+  {
+    currentAzimuth = 180 + azOffset;
+  }
+  if (debugPrint)
+  {
+    Serial.print("Azimuth: ");
+    Serial.println(currentAzimuth);
+    Serial.print("Shutter: ");
+    Serial.println(shArray[shStatus]);
+    Serial.print("Dome: ");
+    if (Slewing)
+    {
+      Serial.print("Slewing to ");
+      Serial.println(toAzimuth);
+    }
+    else
+    {
+      Serial.println("Stationary");
+    }
+    Serial.println("-------------------------");
+  }
+} //end getInfo()
 
 // read an SMC serial byte
 int readSMCByte()

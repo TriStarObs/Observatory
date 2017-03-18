@@ -106,43 +106,14 @@ Public Class Dome
 
     Public ReadOnly Property SupportedActions() As ArrayList Implements IDomeV2.SupportedActions
         Get
-            TL.LogMessage("SupportedActions Get", "Returning ActionsList (StopShutter, ResetShutter)")
+            TL.LogMessage("SupportedActions Get", "Returning Empty ActionsList")
             Dim ActionsList As New ArrayList
-            ActionsList.Add("Dome:StopShutter")
-            ActionsList.Add("Dome:ResetShutter")
-            ActionsList.Add("Dome:GetStatus")
             Return ActionsList
         End Get
     End Property
 
     Public Function Action(ByVal ActionName As String, ByVal ActionParameters As String) As String Implements IDomeV2.Action
-        Select Case ActionName
-            Case "StopShutter"
-                Try
-                    CommandBlind("xxxx#")
-                    Return "Shutter stopped"
-                Catch ex As Exception
-                    Throw New ApplicationException("Unable to stop shutter", ex)
-                End Try
-            Case "ResetShutter"
-                Try
-                    CommandBlind("rset#")
-                    Return "Shutter Reset"
-                Catch ex As Exception
-                    Throw New ApplicationException("Unable to reset shutter", ex)
-                End Try
-            Case "GetStatus"
-                Try
-                    Dim strStatus As String
-                    strStatus = CommandString("snfo#")
-                    Return strStatus
-                Catch ex As Exception
-                    Throw New ApplicationException("Unable to get status", ex)
-                End Try
-
-            Case Else
-                Throw New ActionNotImplementedException("Action " & ActionName & " is not supported by this driver")
-        End Select
+        Throw New ActionNotImplementedException("Action " & ActionName & " is not supported by this driver")
     End Function
 
     Public Sub CommandBlind(ByVal Command As String, Optional ByVal Raw As Boolean = False) Implements IDomeV2.CommandBlind
@@ -285,7 +256,6 @@ Public Class Dome
 
     Public ReadOnly Property AtHome() As Boolean Implements IDomeV2.AtHome
         Get
-            ' TODO : Implement
             TL.LogMessage("AtHome", "Not implemented")
             Throw New ASCOM.PropertyNotImplementedException("AtHome", False)
         End Get
@@ -301,8 +271,7 @@ Public Class Dome
 
     Public ReadOnly Property Azimuth() As Double Implements IDomeV2.Azimuth
         Get
-            'TL.LogMessage("azimuth", "Not implemented")
-            'Throw New ASCOM.PropertyNotImplementedException("Azimuth", False)
+            ' TODO : Change code to use local variables obtained from "info"
             dblAzimuth = CDbl(CommandString("dazm#", True))
             TL.LogMessage("Azimuth", dblAzimuth.ToString)
             Return dblAzimuth
@@ -311,7 +280,6 @@ Public Class Dome
 
     Public ReadOnly Property CanFindHome() As Boolean Implements IDomeV2.CanFindHome
         Get
-            ' TODO : Implement
             TL.LogMessage("CanFindHome Get", False.ToString())
             Return False
         End Get
@@ -319,15 +287,13 @@ Public Class Dome
 
     Public ReadOnly Property CanPark() As Boolean Implements IDomeV2.CanPark
         Get
-            ' TODO : Implement
-            TL.LogMessage("CanPark Get", False.ToString())
-            Return False
+            TL.LogMessage("CanPark Get", True.ToString())
+            Return True
         End Get
     End Property
 
     Public ReadOnly Property CanSetAltitude() As Boolean Implements IDomeV2.CanSetAltitude
         Get
-            ' Dome cannot set altitude
             TL.LogMessage("CanSetAltitude Get", False.ToString())
             Return False
         End Get
@@ -335,7 +301,6 @@ Public Class Dome
 
     Public ReadOnly Property CanSetAzimuth() As Boolean Implements IDomeV2.CanSetAzimuth
         Get
-            ' TODO : Implement
             TL.LogMessage("CanSetAzimuth Get", True.ToString())
             Return True
         End Get
@@ -343,7 +308,6 @@ Public Class Dome
 
     Public ReadOnly Property CanSetPark() As Boolean Implements IDomeV2.CanSetPark
         Get
-            ' TODO : Implement
             TL.LogMessage("CanSetPark Get", False.ToString())
             Return False
         End Get
@@ -366,25 +330,25 @@ Public Class Dome
 
     Public ReadOnly Property CanSyncAzimuth() As Boolean Implements IDomeV2.CanSyncAzimuth
         Get
-            ' TODO : Implement
             TL.LogMessage("CanSyncAzimuth Get", False.ToString())
             Return False
         End Get
     End Property
 
     Public Sub CloseShutter() Implements IDomeV2.CloseShutter
+        'TODO : Change command to "clos", handle shutter status local variable
         CommandBlind("shcl#", True)
         TL.LogMessage("CloseShutter", "Shutter has been closed")
         'domeShutterState = False
     End Sub
 
     Public Sub FindHome() Implements IDomeV2.FindHome
-        ' TODO : Implement
         TL.LogMessage("FindHome", "Not implemented")
         Throw New ASCOM.MethodNotImplementedException("FindHome")
     End Sub
 
     Public Sub OpenShutter() Implements IDomeV2.OpenShutter
+        'TODO : Change command to "open", handle shutter status local variable
         TL.LogMessage("OpenShutter", "Shutter has been opened")
         CommandBlind("shop#", True)
     End Sub
@@ -396,14 +360,13 @@ Public Class Dome
     End Sub
 
     Public Sub SetPark() Implements IDomeV2.SetPark
-        ' TODO : Implement
         TL.LogMessage("SetPark", "Not implemented")
         Throw New ASCOM.MethodNotImplementedException("SetPark")
     End Sub
 
     Public ReadOnly Property ShutterStatus() As ShutterState Implements IDomeV2.ShutterStatus
         Get
-
+            'TODO : Fix this disgusting mess, get varibales from "info" and handle gracefully
             Dim intShutterStatus As Integer = CInt(CommandString("snfo#"))
             If intShutterStatus = 255 Then
                 TL.LogMessage("ShutterStatus", ShutterState.shutterError.ToString())
@@ -449,6 +412,7 @@ Public Class Dome
     End Sub
 
     Public Sub SlewToAzimuth(Azimuth As Double) Implements IDomeV2.SlewToAzimuth
+        'TODO : Fix w/ correct code sNNN
         CommandBlind("m" & Azimuth.ToString & "#")
         TL.LogMessage("SlewToAzimuth", "Slew to " & Azimuth.ToString)
         'Throw New ASCOM.MethodNotImplementedException("SlewToAzimuth")
@@ -463,7 +427,6 @@ Public Class Dome
     End Property
 
     Public Sub SyncToAzimuth(Azimuth As Double) Implements IDomeV2.SyncToAzimuth
-        ' TODO : Implement
         TL.LogMessage("SyncToAzimuth", "Not implemented")
         Throw New ASCOM.MethodNotImplementedException("SyncToAzimuth")
     End Sub
